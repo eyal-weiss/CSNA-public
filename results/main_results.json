@@ -1,0 +1,463 @@
+{
+  "main_comparison": {
+    "description": "Node classification accuracy (%) on heterophily benchmarks. All methods tuned over the same grid.",
+    "methods": [
+      "MLP",
+      "GCN",
+      "GAT",
+      "GraphSAGE",
+      "H2GCN",
+      "GPRGNN",
+      "ACM-GNN",
+      "CSNA"
+    ],
+    "datasets": [
+      "Texas",
+      "Wisconsin",
+      "Cornell",
+      "Actor",
+      "Chameleon",
+      "Squirrel"
+    ],
+    "results": {
+      "Texas": {
+        "MLP": {
+          "mean": 77.3,
+          "std": 4.6
+        },
+        "GCN": {
+          "mean": 55.7,
+          "std": 9.9
+        },
+        "GAT": {
+          "mean": 50.8,
+          "std": 9.8
+        },
+        "GraphSAGE": {
+          "mean": 76.5,
+          "std": 6.8
+        },
+        "H2GCN": {
+          "mean": 75.9,
+          "std": 5.0
+        },
+        "GPRGNN": {
+          "mean": 78.1,
+          "std": 8.0
+        },
+        "ACM-GNN": {
+          "mean": 75.9,
+          "std": 6.3
+        },
+        "CSNA": {
+          "mean": 77.0,
+          "std": 8.3
+        }
+      },
+      "Wisconsin": {
+        "MLP": {
+          "mean": 83.7,
+          "std": 4.8
+        },
+        "GCN": {
+          "mean": 50.6,
+          "std": 8.5
+        },
+        "GAT": {
+          "mean": 51.4,
+          "std": 7.8
+        },
+        "GraphSAGE": {
+          "mean": 75.9,
+          "std": 5.8
+        },
+        "H2GCN": {
+          "mean": 76.1,
+          "std": 6.1
+        },
+        "GPRGNN": {
+          "mean": 78.6,
+          "std": 5.1
+        },
+        "ACM-GNN": {
+          "mean": 80.0,
+          "std": 6.1
+        },
+        "CSNA": {
+          "mean": 79.6,
+          "std": 6.2
+        }
+      },
+      "Cornell": {
+        "MLP": {
+          "mean": 72.2,
+          "std": 3.6
+        },
+        "GCN": {
+          "mean": 47.0,
+          "std": 8.7
+        },
+        "GAT": {
+          "mean": 47.3,
+          "std": 5.8
+        },
+        "GraphSAGE": {
+          "mean": 66.2,
+          "std": 7.7
+        },
+        "H2GCN": {
+          "mean": 67.8,
+          "std": 7.7
+        },
+        "GPRGNN": {
+          "mean": 70.0,
+          "std": 6.7
+        },
+        "ACM-GNN": {
+          "mean": 69.5,
+          "std": 5.1
+        },
+        "CSNA": {
+          "mean": 72.7,
+          "std": 4.3
+        }
+      },
+      "Actor": {
+        "MLP": {
+          "mean": 35.0,
+          "std": 1.4
+        },
+        "GCN": {
+          "mean": 27.3,
+          "std": 1.4
+        },
+        "GAT": {
+          "mean": 28.0,
+          "std": 1.4
+        },
+        "GraphSAGE": {
+          "mean": 34.1,
+          "std": 0.6
+        },
+        "H2GCN": {
+          "mean": 31.3,
+          "std": 1.7
+        },
+        "GPRGNN": {
+          "mean": 34.2,
+          "std": 0.7
+        },
+        "ACM-GNN": {
+          "mean": 33.5,
+          "std": 1.6
+        },
+        "CSNA": {
+          "mean": 35.7,
+          "std": 1.2
+        }
+      },
+      "Chameleon": {
+        "MLP": {
+          "mean": 51.9,
+          "std": 1.8
+        },
+        "GCN": {
+          "mean": 67.3,
+          "std": 1.7
+        },
+        "GAT": {
+          "mean": 65.7,
+          "std": 2.2
+        },
+        "GraphSAGE": {
+          "mean": 63.9,
+          "std": 2.1
+        },
+        "H2GCN": {
+          "mean": 51.5,
+          "std": 2.8
+        },
+        "GPRGNN": {
+          "mean": 58.5,
+          "std": 2.8
+        },
+        "ACM-GNN": {
+          "mean": 59.3,
+          "std": 2.0
+        },
+        "CSNA": {
+          "mean": 54.6,
+          "std": 2.7
+        }
+      },
+      "Squirrel": {
+        "MLP": {
+          "mean": 34.8,
+          "std": 1.4
+        },
+        "GCN": {
+          "mean": 53.4,
+          "std": 0.8
+        },
+        "GAT": {
+          "mean": 50.4,
+          "std": 1.4
+        },
+        "GraphSAGE": {
+          "mean": 45.8,
+          "std": 1.4
+        },
+        "H2GCN": {
+          "mean": 37.3,
+          "std": 2.8
+        },
+        "GPRGNN": {
+          "mean": 38.4,
+          "std": 2.3
+        },
+        "ACM-GNN": {
+          "mean": 41.6,
+          "std": 1.3
+        },
+        "CSNA": {
+          "mean": 37.8,
+          "std": 1.9
+        }
+      }
+    }
+  },
+  "variant_comparison": {
+    "description": "CSNA variant comparison. Full = g+h cost; Lite = g only. Samp = 50% edge sampling during training.",
+    "variants": [
+      "Full, no samp",
+      "Full + samp",
+      "Lite, no samp",
+      "Lite + samp"
+    ],
+    "results": {
+      "Texas": {
+        "Full, no samp": {
+          "mean": 77.0,
+          "std": 8.9
+        },
+        "Full + samp": {
+          "mean": 74.1,
+          "std": 8.7
+        },
+        "Lite, no samp": {
+          "mean": 77.0,
+          "std": 8.3
+        },
+        "Lite + samp": {
+          "mean": 75.7,
+          "std": 9.0
+        }
+      },
+      "Wisconsin": {
+        "Full, no samp": {
+          "mean": 84.1,
+          "std": 5.7
+        },
+        "Full + samp": {
+          "mean": 79.8,
+          "std": 7.0
+        },
+        "Lite, no samp": {
+          "mean": 79.6,
+          "std": 6.2
+        },
+        "Lite + samp": {
+          "mean": 79.6,
+          "std": 6.4
+        }
+      },
+      "Cornell": {
+        "Full, no samp": {
+          "mean": 70.8,
+          "std": 7.6
+        },
+        "Full + samp": {
+          "mean": 70.5,
+          "std": 5.2
+        },
+        "Lite, no samp": {
+          "mean": 72.7,
+          "std": 4.3
+        },
+        "Lite + samp": {
+          "mean": 70.3,
+          "std": 3.6
+        }
+      },
+      "Actor": {
+        "Full, no samp": {
+          "mean": 35.6,
+          "std": 1.5
+        },
+        "Full + samp": {
+          "mean": 36.3,
+          "std": 1.1
+        },
+        "Lite, no samp": {
+          "mean": 35.7,
+          "std": 1.2
+        },
+        "Lite + samp": {
+          "mean": 35.8,
+          "std": 1.1
+        }
+      },
+      "Chameleon": {
+        "Full, no samp": {
+          "mean": 53.0,
+          "std": 2.8
+        },
+        "Full + samp": {
+          "mean": 51.8,
+          "std": 1.6
+        },
+        "Lite, no samp": {
+          "mean": 54.6,
+          "std": 2.7
+        },
+        "Lite + samp": {
+          "mean": 53.5,
+          "std": 2.2
+        }
+      },
+      "Squirrel": {
+        "Full, no samp": {
+          "mean": 38.2,
+          "std": 1.6
+        },
+        "Full + samp": {
+          "mean": 37.4,
+          "std": 1.7
+        },
+        "Lite, no samp": {
+          "mean": 37.8,
+          "std": 1.9
+        },
+        "Lite + samp": {
+          "mean": 37.0,
+          "std": 2.5
+        }
+      }
+    }
+  },
+  "homophily_benchmarks": {
+    "description": "Accuracy (%) on homophilous graphs. CSNA underperforms GCN.",
+    "results": {
+      "Cora": {
+        "MLP": {
+          "mean": 50.7,
+          "std": 1.5
+        },
+        "GCN": {
+          "mean": 77.9,
+          "std": 0.5
+        },
+        "GAT": {
+          "mean": 78.3,
+          "std": 0.8
+        },
+        "GPRGNN": {
+          "mean": 79.7,
+          "std": 1.0
+        },
+        "CSNA": {
+          "mean": 67.0,
+          "std": 4.4
+        }
+      },
+      "CiteSeer": {
+        "MLP": {
+          "mean": 49.9,
+          "std": 1.1
+        },
+        "GCN": {
+          "mean": 65.7,
+          "std": 0.6
+        },
+        "GAT": {
+          "mean": 65.0,
+          "std": 1.2
+        },
+        "GPRGNN": {
+          "mean": 67.0,
+          "std": 1.2
+        },
+        "CSNA": {
+          "mean": 56.3,
+          "std": 3.4
+        }
+      },
+      "PubMed": {
+        "MLP": {
+          "mean": 67.1,
+          "std": 0.7
+        },
+        "GCN": {
+          "mean": 76.0,
+          "std": 1.1
+        },
+        "GAT": {
+          "mean": 74.9,
+          "std": 1.2
+        },
+        "GPRGNN": {
+          "mean": 78.0,
+          "std": 0.7
+        },
+        "CSNA": {
+          "mean": 72.2,
+          "std": 0.6
+        }
+      }
+    }
+  },
+  "dataset_info": {
+    "Texas": {
+      "nodes": 183,
+      "edges": 287,
+      "features": 1703,
+      "classes": 5,
+      "homophily": 0.09
+    },
+    "Wisconsin": {
+      "nodes": 251,
+      "edges": 458,
+      "features": 1703,
+      "classes": 5,
+      "homophily": 0.19
+    },
+    "Cornell": {
+      "nodes": 183,
+      "edges": 278,
+      "features": 1703,
+      "classes": 5,
+      "homophily": 0.13
+    },
+    "Actor": {
+      "nodes": 7600,
+      "edges": 26705,
+      "features": 932,
+      "classes": 5,
+      "homophily": 0.22
+    },
+    "Chameleon": {
+      "nodes": 2277,
+      "edges": 31396,
+      "features": 2325,
+      "classes": 5,
+      "homophily": 0.23
+    },
+    "Squirrel": {
+      "nodes": 5201,
+      "edges": 198423,
+      "features": 2089,
+      "classes": 5,
+      "homophily": 0.22
+    }
+  }
+}
