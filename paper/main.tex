@@ -381,7 +381,12 @@ ACM-GNN and CSNA show a similar overall pattern.
 CSNA slightly outperforms ACM-GNN on Cornell (+3.2pp) and Actor (+2.2pp), while ACM-GNN is ahead on Chameleon (+4.7pp) and Squirrel (+3.8pp).
 The accuracy differences between CSNA and ACM-GNN are generally within one standard deviation, suggesting that the per-edge granularity does not consistently translate to measurable accuracy gains over uniform spectral channels.
 The methods differ mainly in mechanism, not in overall performance level.
-The separation in \Cref{fig:cost_dist} is strongest on Texas and Cornell (where CSNA outperforms GCN by 21+ pp) and weakest on Actor (where the margin is 8pp), suggesting that routing quality---the cost function's ability to discriminate same-class from cross-class edges---correlates with the performance gain from per-edge routing.
+\paragraph{Routing quality as a diagnostic.}
+To quantify the cost function's ability to discriminate edge types, we compute the AUC of the concordance score $s_{ij}$ as a binary classifier for same-class vs.\ different-class edges.
+On the adversarial-heterophily datasets, AUC ranges from 0.48 (Texas) to 0.83 (Wisconsin), while on informative-heterophily datasets it is 0.55--0.57 (Chameleon, Squirrel).
+Interestingly, CSNA's accuracy gain over GCN does not correlate simply with AUC: Texas has near-random AUC (0.48) yet CSNA outperforms GCN by 21pp, while Wisconsin has the highest AUC (0.83) and the largest gain (+29pp).
+This suggests that CSNA's benefit comes not only from edge-type separation but also from the dual-channel architecture and gating mechanism, which can learn useful representations even when the cost function's discrimination is weak.
+On informative-heterophily datasets, both the low AUC and the poor accuracy confirm that the cost function cannot usefully decompose the neighborhood.
 
 \paragraph{Ablation highlights.}
 We tested four CSNA variants in a factorial design (\Cref{app:variants}): the extended model ($g+h$) vs.\ the lite default ($g$ only), each with and without stochastic edge sampling~\cite{rong2020dropedge}.
@@ -410,7 +415,7 @@ These results motivate presenting the lite version without sampling as the defau
 We presented CSNA, a GNN layer that computes pairwise distance in a learned projection and uses it to soft-route messages through concordant and discordant channels, with per-node gating.
 The key architectural difference from the closely related ACM-GNN is per-edge routing rather than uniform spectral channels---a finer-grained mechanism that, in our experiments, yields comparable accuracy at higher computational cost.
 Our theoretical analysis provides a clean condition ($w_+/w_- > q/p$) under which cost-sensitive weighting improves over mean aggregation.
-Future work includes adaptation to the informative-heterophily regime (where CSNA currently underperforms), efficient scaling via edge sampling, and extending the analysis beyond single-layer binary CSBM.
+The clearest open question is whether per-edge routing can be adapted to the informative-heterophily regime---where CSNA currently fails---possibly by learning to leverage rather than suppress cross-class signal.
 
 
 %% ================================================================
