@@ -451,7 +451,8 @@ Lite + samp & 75.7 & 79.6 & 70.3 & 35.8 & 53.5 & 37.0 \\
 \paragraph{Discussion.}
 The full variant ($g+h$) wins clearly only on Wisconsin (84.1 vs.\ 79.6), where the learned component $h_{ij}$ provides a useful correction beyond observed divergence.
 On all other datasets, the lite version matches or exceeds the full version, suggesting that feature divergence $g_{ij}$ alone is a sufficient routing signal.
-This motivates presenting the lite version as the default.
+Since $h_{ij}$ introduces additional learnable parameters without a clear consistent advantage, it risks overfitting---particularly on the small datasets in our benchmark suite.
+We therefore use the lite version ($g_{ij}$ only) as the default.
 
 Edge sampling slightly hurts accuracy on most datasets (1--3pp) but may act as a regularizer on Actor (36.3 vs.\ 35.6 for the full variant).
 The accuracy cost of sampling is modest, making it a viable strategy for scaling to larger graphs.
