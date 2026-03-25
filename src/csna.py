@@ -113,14 +113,20 @@ class CSNAConv(MessagePassing):
         s_ij = torch.sigmoid(-g_ij / self.tau)
 
         # Concordant aggregation
+        # NOTE: We normalize per source node (edge_index[0]), meaning each node
+        # distributes its outgoing influence uniformly. This differs from the more
+        # common per-destination normalization (edge_index[1]). We tested both and
+        # found no consistent accuracy difference across datasets (within std).
+        # To switch to per-destination normalization, change edge_index[0] to
+        # edge_index[1] in the two softmax calls below.
         x_con = self.W_con(x)
-        con_w = softmax(s_ij.squeeze(), edge_index[1], num_nodes=x.size(0))
+        con_w = softmax(s_ij.squeeze(), edge_index[0], num_nodes=x.size(0))
         con_w = F.dropout(con_w, p=self.dropout, training=self.training)
         out_con = self.propagate(edge_index, x=x_con, weights=con_w)
 
         # Discordant aggregation
         x_dis = self.W_dis(x)
-        dis_w = softmax((1 - s_ij).squeeze(), edge_index[1], num_nodes=x.size(0))
+        dis_w = softmax((1 - s_ij).squeeze(), edge_index[0], num_nodes=x.size(0))
         dis_w = F.dropout(dis_w, p=self.dropout, training=self.training)
         out_dis = self.propagate(edge_index, x=x_dis, weights=dis_w)
 
@@ -301,15 +307,15 @@ class CSNAExtConv(MessagePassing):
         self._h_ij = h_ij
         self._edge_index = edge_index
 
-        # Concordant aggregation
+        # Concordant aggregation (per-source normalization; see note in CSNAConv)
         x_con = self.W_con(x)
-        con_w = softmax(s_ij.squeeze(), edge_index[1], num_nodes=x.size(0))
+        con_w = softmax(s_ij.squeeze(), edge_index[0], num_nodes=x.size(0))
         con_w = F.dropout(con_w, p=self.dropout, training=self.training)
         out_con = self.propagate(edge_index, x=x_con, weights=con_w)
 
         # Discordant aggregation
         x_dis = self.W_dis(x)
-        dis_w = softmax((1 - s_ij).squeeze(), edge_index[1], num_nodes=x.size(0))
+        dis_w = softmax((1 - s_ij).squeeze(), edge_index[0], num_nodes=x.size(0))
         dis_w = F.dropout(dis_w, p=self.dropout, training=self.training)
         out_dis = self.propagate(edge_index, x=x_dis, weights=dis_w)
 

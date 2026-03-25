@@ -105,6 +105,10 @@ loss += 0.01 * model.consistency_loss()
 }
 ```
 
+## Note on Softmax Normalization
+
+CSNA normalizes concordance weights per source node (`edge_index[0]`), meaning each node distributes its outgoing influence uniformly. This differs from the more common per-destination normalization (`edge_index[1]`). We tested both variants with full hyperparameter tuning on Texas, Wisconsin, and Cornell and found no consistent accuracy difference across datasets (differences within standard deviation and typical tuning variance). The code includes a comment indicating how to switch to per-destination normalization if desired.
+
 ## Note on Baselines
 
 The H2GCN, GPRGNN, and ACM-GNN implementations in this repository are simplified in-house versions, not official reproductions. Results may differ slightly from those reported in the original papers due to implementation differences. All models are tuned over the same hyperparameter grid for fair comparison.

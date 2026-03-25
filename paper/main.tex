@@ -183,6 +183,7 @@ Note that $g_{ij}$ and the binary indicator $\mathbb{1}[y_i \neq y_j]$ are on di
 \paragraph{Architecture details.}
 We apply an input MLP before the first CSNA layer, add residual connections, and initialize the gate bias to $[0, 0, 1]$ (favoring the ego channel so the model starts near MLP-like behavior).
 Self-loops are added before cost computation; they receive $g_{ii}=0$, so ego information flows primarily through the concordant and self channels.
+The softmax normalization of concordance weights is performed per source node; we also tested per-destination normalization (more common in message-passing GNNs) and found no consistent difference across datasets.
 
 The CSNA layer is summarized in Algorithm~\ref{alg:csna}.
 
