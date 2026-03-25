@@ -6,6 +6,8 @@ This repository contains the official implementation of the paper:
 > Eyal Weiss, Technion -- Israel Institute of Technology
 > arXiv preprint, 2026
 
+Graph Neural Networks (GNNs) learn from data organized as networks — social graphs, molecules, citation networks. They work by aggregating information from neighboring nodes, but this fails when connected nodes tend to belong to *different* classes (a property called *heterophily*). CSNA addresses this by measuring how different each pair of connected nodes is and routing their messages through separate processing channels depending on whether they appear similar or dissimilar.
+
 Recent work distinguishes two heterophily regimes: *adversarial*, where cross-class edges harm classification, and *informative*, where they carry useful structural signal. We introduce CSNA, a method that computes pairwise distance in a learned projection and uses it to soft-route messages through **concordant** and **discordant** channels with independent transformations. CSNA's per-edge routing succeeds on adversarial-heterophily datasets but fails on informative-heterophily datasets — a pattern that operationalizes the regime distinction and reveals when per-edge routing helps.
 
 ![Toy example: uniform vs per-edge routing](paper/figures/toy_example.png)
