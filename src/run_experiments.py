@@ -166,11 +166,15 @@ def train_and_eval(model_name, data, train_mask, val_mask, test_mask,
         best_val: Best validation accuracy.
         test_acc: Test accuracy of the best-val checkpoint.
     """
+    torch.manual_seed(42)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(42)
+
     model = build_model(model_name, in_ch, hidden, n_cls,
                         dropout=dropout, tau=tau).to(DEVICE)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=5e-4)
 
-    best_val = 0.0
+    best_val = -float('inf')
     best_state = None
     no_improve = 0
 

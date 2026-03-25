@@ -13,15 +13,15 @@ Two variants are provided:
     so the total edge cost is f_ij = g_ij + h_ij (analogous to A*'s f = g + h).
 
 Reference:
-    Weiss, E. "Cost-Sensitive Neighborhood Aggregation for Heterophilous Graphs."
-    ICANN 2026.
+    Weiss, E. "Cost-Sensitive Neighborhood Aggregation for Heterophilous Graphs:
+    When Does Per-Edge Routing Help?" arXiv preprint, 2026.
 """
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch_geometric.nn import MessagePassing
-from torch_geometric.utils import add_self_loops, softmax
+from torch_geometric.utils import add_remaining_self_loops, softmax
 
 
 # ---------------------------------------------------------------------------
@@ -98,7 +98,7 @@ class CSNAConv(MessagePassing):
         return edge_index[:, keep]
 
     def forward(self, x, edge_index):
-        edge_index, _ = add_self_loops(edge_index, num_nodes=x.size(0))
+        edge_index, _ = add_remaining_self_loops(edge_index, num_nodes=x.size(0))
 
         # Optional edge sampling
         if self.sample_ratio < 1.0 and self.training:
@@ -114,13 +114,13 @@ class CSNAConv(MessagePassing):
 
         # Concordant aggregation
         x_con = self.W_con(x)
-        con_w = softmax(s_ij.squeeze(), edge_index[0], num_nodes=x.size(0))
+        con_w = softmax(s_ij.squeeze(), edge_index[1], num_nodes=x.size(0))
         con_w = F.dropout(con_w, p=self.dropout, training=self.training)
         out_con = self.propagate(edge_index, x=x_con, weights=con_w)
 
         # Discordant aggregation
         x_dis = self.W_dis(x)
-        dis_w = softmax((1 - s_ij).squeeze(), edge_index[0], num_nodes=x.size(0))
+        dis_w = softmax((1 - s_ij).squeeze(), edge_index[1], num_nodes=x.size(0))
         dis_w = F.dropout(dis_w, p=self.dropout, training=self.training)
         out_dis = self.propagate(edge_index, x=x_dis, weights=dis_w)
 
@@ -278,7 +278,7 @@ class CSNAExtConv(MessagePassing):
         nn.init.zeros_(self.W_h.bias)
 
     def forward(self, x, edge_index):
-        edge_index, _ = add_self_loops(edge_index, num_nodes=x.size(0))
+        edge_index, _ = add_remaining_self_loops(edge_index, num_nodes=x.size(0))
 
         # Project for cost computation
         x_g = self.W_g(x)
@@ -303,13 +303,13 @@ class CSNAExtConv(MessagePassing):
 
         # Concordant aggregation
         x_con = self.W_con(x)
-        con_w = softmax(s_ij.squeeze(), edge_index[0], num_nodes=x.size(0))
+        con_w = softmax(s_ij.squeeze(), edge_index[1], num_nodes=x.size(0))
         con_w = F.dropout(con_w, p=self.dropout, training=self.training)
         out_con = self.propagate(edge_index, x=x_con, weights=con_w)
 
         # Discordant aggregation
         x_dis = self.W_dis(x)
-        dis_w = softmax((1 - s_ij).squeeze(), edge_index[0], num_nodes=x.size(0))
+        dis_w = softmax((1 - s_ij).squeeze(), edge_index[1], num_nodes=x.size(0))
         dis_w = F.dropout(dis_w, p=self.dropout, training=self.training)
         out_dis = self.propagate(edge_index, x=x_dis, weights=dis_w)
 

@@ -1,10 +1,10 @@
-# CSNA: Cost-Sensitive Neighborhood Aggregation for Heterophilous Graphs
+# CSNA: Cost-Sensitive Neighborhood Aggregation for Heterophilous Graphs — When Does Per-Edge Routing Help?
 
 This repository contains the official implementation of the paper:
 
-> **Cost-Sensitive Neighborhood Aggregation for Heterophilous Graphs**
+> **Cost-Sensitive Neighborhood Aggregation for Heterophilous Graphs: When Does Per-Edge Routing Help?**
 > Eyal Weiss, Technion -- Israel Institute of Technology
-> ICANN 2026
+> arXiv preprint, 2026
 
 Standard message-passing GNNs aggregate neighbor features uniformly, which degrades performance on heterophilous graphs where connected nodes often differ in class. CSNA computes pairwise distance in a learned projection and uses it to soft-route messages through two channels -- **concordant** (low cost, likely same-class) and **discordant** (high cost, likely different-class) -- each with an independent learned transformation. A per-node gating mechanism combines the two channels with an ego term. Under a contextual stochastic block model, we show that cost-sensitive weighting preserves class-discriminative signal where standard mean aggregation provably attenuates it.
 
@@ -38,6 +38,7 @@ See [PyTorch Geometric installation](https://pytorch-geometric.readthedocs.io/en
 ### Quick Start
 
 ```python
+import sys; sys.path.insert(0, 'src')  # run from repo root
 from csna import CSNA
 
 # Initialize model
@@ -77,7 +78,7 @@ python run_experiments.py --output ../results/my_results.json
 The extended variant adds a learned heuristic component, mirroring A*'s f = g + h decomposition:
 
 ```python
-from csna import CSNAExt
+from csna import CSNAExt  # assumes sys.path includes src/
 
 model = CSNAExt(
     in_channels=1703,
@@ -96,13 +97,17 @@ loss += 0.01 * model.consistency_loss()
 ## Citation
 
 ```bibtex
-@inproceedings{weiss2026csna,
-  title={Cost-Sensitive Neighborhood Aggregation for Heterophilous Graphs},
+@article{weiss2026csna,
+  title={Cost-Sensitive Neighborhood Aggregation for Heterophilous Graphs: When Does Per-Edge Routing Help?},
   author={Weiss, Eyal},
-  booktitle={International Conference on Artificial Neural Networks (ICANN)},
+  journal={arXiv preprint},
   year={2026}
 }
 ```
+
+## Note on Baselines
+
+The H2GCN, GPRGNN, and ACM-GNN implementations in this repository are simplified in-house versions, not official reproductions. Results may differ slightly from those reported in the original papers due to implementation differences. All models are tuned over the same hyperparameter grid for fair comparison.
 
 ## Author
 
