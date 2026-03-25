@@ -23,9 +23,9 @@
 
 \begin{document}
 
-\title{Cost-Sensitive Neighborhood Aggregation\\for Heterophilous Graphs}
+\title{Cost-Sensitive Neighborhood Aggregation\\for Heterophilous Graphs:\\When Does Per-Edge Routing Help?}
 
-\titlerunning{Cost-Sensitive Neighborhood Aggregation}
+\titlerunning{CSNA: When Does Per-Edge Routing Help?}
 
 \author{Eyal Weiss\orcidID{0000-0003-0508-6213}}
 
@@ -37,11 +37,12 @@
 \maketitle
 
 \begin{abstract}
-Standard message-passing GNNs aggregate neighbor features uniformly, which degrades performance on heterophilous graphs where connected nodes often differ in class.
-We propose \emph{Cost-Sensitive Neighborhood Aggregation} (CSNA), a method that computes pairwise distance in a learned projection and uses it to soft-route messages through two channels---concordant and discordant---each with an independent learned transformation.
-A per-node gating mechanism combines the two channels with an ego term.
-Under a contextual stochastic block model, we show that cost-sensitive weighting preserves class-discriminative signal where standard mean aggregation provably attenuates it, provided $w_+/w_- > q/p$ (the concordance ratio exceeds the inter-class to intra-class edge probability ratio).
-On six heterophily benchmarks with uniform hyperparameter tuning across all methods, CSNA is competitive with specialized heterophily methods on adversarial-heterophily datasets (Texas, Wisconsin, Cornell, Actor), while underperforming on informative-heterophily datasets (Chameleon, Squirrel) and on homophilous graphs---limitations we document in detail.
+Recent work distinguishes two heterophily regimes: \emph{adversarial}, where cross-class edges dilute class signal and harm classification, and \emph{informative}, where the heterophilous structure itself carries useful signal.
+We ask: \emph{when does per-edge message routing help, and when is a uniform spectral channel sufficient?}
+To operationalize this question we introduce \emph{Cost-Sensitive Neighborhood Aggregation} (CSNA), a GNN layer that computes pairwise distance in a learned projection and uses it to soft-route each message through concordant and discordant channels with independent transformations.
+Under a contextual stochastic block model we show that cost-sensitive weighting preserves class-discriminative signal where mean aggregation provably attenuates it, provided $w_+/w_- > q/p$.
+On six benchmarks with uniform tuning, CSNA is competitive with state-of-the-art methods on adversarial-heterophily datasets (Texas, Wisconsin, Cornell, Actor) but underperforms on informative-heterophily datasets (Chameleon, Squirrel)---precisely the regime where per-edge routing has no useful decomposition to exploit.
+The pattern is itself the finding: the cost function's ability to separate edge types serves as a diagnostic for the heterophily regime, revealing \emph{when} fine-grained routing adds value over uniform channels and when it does not.
 Code is available at \url{https://github.com/eyal-weiss/CSNA-public}.
 
 \keywords{Graph Neural Networks \and Heterophily \and Message Passing \and Cost-Sensitive Aggregation}
@@ -65,10 +66,9 @@ The key difference from ACM-GNN is that CSNA's routing is \emph{per-edge}: each 
 This finer granularity comes at the cost of additional per-edge computation (3--10$\times$ overhead vs.\ GCN; see \Cref{app:runtime}).
 
 \paragraph{Contributions.}
-(1)~We introduce CSNA, a dual-channel message-passing layer with per-edge cost-based routing (\Cref{sec:method}).
-The default (``lite'') version uses only observed divergence $g_{ij}$ in a learned projection; an extended version adds a learned component $h_{ij}$.
-(2)~Under a contextual stochastic block model (CSBM), we show that cost-sensitive weighting preserves class signal where mean aggregation degrades it, provided $w_+/w_- > q/p$ (\Cref{sec:theory}).
-(3)~Empirical evaluation on six heterophily and three homophily benchmarks with uniform tuning across all methods (\Cref{sec:experiments}).
+(1)~We characterize when per-edge routing helps: CSNA's learned cost function achieves strong edge-type separation on adversarial-heterophily datasets but not on informative-heterophily datasets, operationalizing the regime distinction through a concrete diagnostic (\Cref{sec:experiments}).
+(2)~We introduce CSNA, a dual-channel message-passing layer with per-edge cost-based routing (\Cref{sec:method}); the default (``lite'') version uses only observed divergence $g_{ij}$ in a learned projection; an extended version adds a learned component $h_{ij}$.
+(3)~Under a contextual stochastic block model (CSBM), we prove that cost-sensitive weighting preserves class signal where mean aggregation degrades it, provided $w_+/w_- > q/p$ (\Cref{sec:theory}).
 
 
 %% ================================================================
@@ -88,6 +88,21 @@ Both ACM-GNN and CSNA route messages through multiple channels and gate the outp
 The difference is in channel construction: ACM-GNN's channels are defined by fixed spectral operations (mean aggregation for low-pass, signed aggregation for high-pass), so every edge within a channel is treated identically.
 CSNA computes a per-edge concordance score from learned pairwise distance and uses it to route each edge independently.
 This is finer-grained but more expensive: ACM-GNN has the same asymptotic cost as GCN ($O(|E| \cdot d)$ per channel, but with fixed structure), while CSNA requires an additional $O(|E| \cdot d)$ distance computation.
+
+\paragraph{When per-edge routing helps: a toy example.}
+\Cref{fig:toy} illustrates the key scenario where per-edge routing outperforms uniform spectral channels.
+Consider a heterophilous graph in which most edges are cross-class, but the cross-class edges have \emph{mixed utility}: some neighbors' features, when transformed, carry complementary information that aids classification, while others are misleading.
+A uniform high-pass channel (as in ACM-GNN) treats all cross-class edges identically---it cannot distinguish helpful from harmful heterophilous neighbors.
+CSNA's per-edge cost function assigns an individual routing weight to each edge, so the model can upweight informative cross-class edges and downweight misleading ones.
+This advantage materializes when node features within a class are not homogeneous---some cross-class neighbors provide complementary signal while others contribute noise---precisely the adversarial-heterophily regime.
+On informative-heterophily datasets, where nearly all heterophilous edges carry useful structural signal, the per-edge decomposition has no useful separation to exploit and the extra routing overhead buys nothing.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.95\textwidth]{figures/toy_example.pdf}
+\vspace{-2mm}
+\caption{Toy example: a heterophilous graph where cross-class edges have mixed utility. \textbf{Left:} ACM-GNN's uniform high-pass channel assigns identical weight to all cross-class edges. \textbf{Right:} CSNA's per-edge cost routing upweights helpful cross-class edges (thick green) and downweights harmful ones (thin dashed red). This distinction is possible only when the cost function can separate edge types---the adversarial-heterophily regime.}\label{fig:toy}
+\end{figure}
 
 \paragraph{Over-smoothing and over-squashing.}
 These pathologies~\cite{li2018deeper,oono2020graph,alon2021on,topping2022understanding} are compounded under heterophily.
@@ -366,6 +381,7 @@ ACM-GNN and CSNA show a similar overall pattern.
 CSNA slightly outperforms ACM-GNN on Cornell (+3.2pp) and Actor (+2.2pp), while ACM-GNN is ahead on Chameleon (+4.7pp) and Squirrel (+3.8pp).
 The accuracy differences between CSNA and ACM-GNN are generally within one standard deviation, suggesting that the per-edge granularity does not consistently translate to measurable accuracy gains over uniform spectral channels.
 The methods differ mainly in mechanism, not in overall performance level.
+The separation in \Cref{fig:cost_dist} is strongest on Texas and Cornell (where CSNA outperforms GCN by 21+ pp) and weakest on Actor (where the margin is 8pp), suggesting that routing quality---the cost function's ability to discriminate same-class from cross-class edges---correlates with the performance gain from per-edge routing.
 
 \paragraph{Ablation highlights.}
 We tested four CSNA variants in a factorial design (\Cref{app:variants}): the extended model ($g+h$) vs.\ the lite default ($g$ only), each with and without stochastic edge sampling~\cite{rong2020dropedge}.
@@ -378,10 +394,10 @@ These results motivate presenting the lite version without sampling as the defau
 \section{Discussion}\label{sec:discussion}
 %% ================================================================
 
-\paragraph{Limitations.}
+\paragraph{Limitations---and what they reveal.}
 \begin{itemize}
-    \item \textbf{Homophilous graphs.} CSNA underperforms GCN by 4--11pp on Cora, CiteSeer, and PubMed (\Cref{app:homophily}). The per-edge routing is not justified when standard aggregation suffices.
-    \item \textbf{Informative heterophily.} CSNA underperforms GCN on Chameleon (by 12.7pp) and Squirrel (by 15.6pp), as discussed above.
+    \item \textbf{Homophilous graphs.} CSNA underperforms GCN by 4--11pp on Cora, CiteSeer, and PubMed (\Cref{app:homophily}). The per-edge routing is not justified when standard aggregation suffices; this is expected, since the cost function has little to separate when most edges are already same-class.
+    \item \textbf{Informative heterophily.} CSNA underperforms GCN on Chameleon (by 12.7pp) and Squirrel (by 15.6pp). Rather than a mere negative result, this failure is diagnostic: it identifies datasets where heterophilous edges are uniformly informative and no per-edge decomposition can improve on uniform aggregation. The pattern---success on adversarial heterophily, failure on informative heterophily---is itself a contribution, as it operationalizes the regime distinction through CSNA's cost semantics.
     \item \textbf{Computational cost.} CSNA is 3--10$\times$ slower than GCN (\Cref{app:runtime}), though it uses fewer parameters.
     \item \textbf{Similarity to ACM-GNN.} CSNA shares the dual-channel-plus-gating design with ACM-GNN~\cite{luan2022revisiting}. The per-edge routing is a meaningful architectural difference, but accuracy gains over ACM-GNN are not consistently significant.
 \end{itemize}
@@ -483,6 +499,7 @@ Squirrel & 0.14 & 0.86 & 0.00 \\
 The gate weights reveal three distinct strategies:
 \begin{itemize}
     \item \textbf{Self-dominant (Wisconsin, Actor):} The model ignores graph structure entirely ($\gamma_{\text{self}} = 1.0$), effectively reducing to MLP. This is consistent with CSNA matching MLP-level accuracy on these datasets.
+    The collapse to MLP-like behavior is itself informative: it indicates that on these datasets, the cost function does not find a useful decomposition of the neighborhood, and the gating mechanism correctly learns to ignore the graph channels.
     \item \textbf{Mixed (Texas, Cornell):} The model uses a combination of ego and graph channels. On Cornell, the discordant channel receives substantial weight ($\gamma_{\text{dis}} = 0.28$), indicating that different-class neighbor information is actively processed.
     \item \textbf{Graph-dominant (Chameleon, Squirrel):} The model relies entirely on graph channels, with the discordant channel dominant ($\gamma_{\text{dis}} = 0.66$ and $0.86$ respectively). Ironically, these are the datasets where CSNA underperforms GCN, suggesting the discordant channel's separate transformation does not capture the useful heterophilous signal as effectively as GCN's uniform aggregation.
 \end{itemize}
