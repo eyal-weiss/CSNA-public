@@ -54,14 +54,14 @@ Code is available at \url{https://github.com/eyal-weiss/CSNA-public}.
 
 Message-passing Graph Neural Networks (GNNs)~\cite{kipf2017semi,velickovic2018graph,hamilton2017inductive} aggregate features from a node's neighborhood under an implicit \emph{homophily} assumption: connected nodes share labels or properties.
 When this assumption holds, aggregation smooths representations within a class and yields strong node classification~\cite{wu2020comprehensive}.
-However, many real-world graphs exhibit \emph{heterophily}---connected nodes frequently differ in label~\cite{pei2020geom,zhu2020beyond}---and on such graphs standard GNNs can perform worse than a simple MLP that ignores graph structure entirely, because aggregation \emph{dilutes} rather than \emph{reinforces} class signal~\cite{zhu2020beyond}.
+However, many real-world graphs exhibit \emph{heterophily}---connected nodes frequently differ in label~\cite{pei2020geom,zhu2020beyond}---and on such graphs standard GNNs can perform worse than a simple Multi-Layer Perceptron (MLP) that ignores graph structure entirely, because aggregation \emph{dilutes} rather than \emph{reinforces} class signal~\cite{zhu2020beyond}.
 
 Several architectures address heterophily: H2GCN~\cite{zhu2020beyond} separates ego from multi-hop neighbor representations; GPRGNN~\cite{chien2021adaptive} learns polynomial graph filter coefficients; ACM-GNN~\cite{luan2022revisiting} mixes low-pass, high-pass, and identity channels with per-node gating.
 These methods share a common intuition---that different edges carry different quality of information for classification---but differ in \emph{how} they distinguish edges.
 ACM-GNN, the most closely related prior work, uses three fixed spectral channels (aggregation, diversification, identity) that are uniform within each channel: every edge receives the same treatment within a given channel.
 
 We propose \emph{Cost-Sensitive Neighborhood Aggregation} (CSNA), which takes a different approach: compute pairwise distance in a learned projection space, and use this distance to soft-route each message through two channels---concordant (low cost, likely same-class) and discordant (high cost, likely different-class)---each with its own learned transformation.
-A per-node gating mechanism then combines the channels with an ego representation.
+A per-node gating mechanism then combines the channels with an ego (the node's own) representation.
 The key difference from ACM-GNN is that CSNA's routing is \emph{per-edge}: each edge receives an individualized routing weight based on the learned distance between its endpoints, rather than a uniform spectral filter applied identically to all edges.
 This finer granularity comes at the cost of additional per-edge computation (3--10$\times$ overhead vs.\ GCN; see \Cref{app:runtime}).
 
@@ -167,7 +167,7 @@ An optional extension adds a learned cost component:
 \begin{equation}\label{eq:f}
     f_{ij}^{(\ell)} = g_{ij}^{(\ell)} + h_{ij}^{(\ell)}, \quad\text{where}\quad h_{ij}^{(\ell)} = \mathrm{softplus}\bigl(\mathbf{a}^\top [\bW_g \bh_i^{(\ell)} \| \bW_g \bh_j^{(\ell)}]\bigr),
 \end{equation}
-where $\mathbf{a} \in \R^{2d'}$ is a learnable parameter vector, and $f_{ij}$ replaces $g_{ij}$ in \Cref{eq:concordance}.
+where $[\cdot \| \cdot]$ denotes vector concatenation, $\mathbf{a} \in \R^{2d'}$ is a learnable parameter vector, and $f_{ij}$ replaces $g_{ij}$ in \Cref{eq:concordance}.
 In our experiments, the extended variant wins clearly only on Wisconsin (84.1 vs.\ 79.6); on all other datasets the lite version performs comparably or better (\Cref{app:variants}).
 We therefore present the lite version ($g_{ij}$ only) as the default.
 
@@ -225,7 +225,7 @@ The heterophilous regime is $q > p$, i.e., $\mathcal{H} < 1/2$.
 
 \begin{theorem}[Signal degradation under mean aggregation]\label{thm:degradation}
 Let $\G \sim \mathrm{CSBM}(n, 2, p, q, \mu)$ with $q > p$.
-After one round of mean aggregation $\mathbf{H}^{(1)} = \tilde{\mathbf{A}} \mathbf{X}$, the expected between-class separation satisfies:
+After one round of mean aggregation $\mathbf{H}^{(1)} = \tilde{\mathbf{A}} \mathbf{X}$, where $\tilde{\mathbf{A}} = \mathbf{D}^{-1/2}(\mathbf{A}+\mathbf{I})\mathbf{D}^{-1/2}$ is the symmetrically normalized adjacency, the expected between-class separation satisfies:
 \begin{equation}
     \frac{\E\bigl[\|\bar{\bh}_+^{(1)} - \bar{\bh}_-^{(1)}\|^2\bigr]}{\|\boldsymbol{\mu}_+ - \boldsymbol{\mu}_-\|^2} = \left(\frac{p - q}{p + q}\right)^2 + O\!\left(\frac{1}{\sqrt{n}}\right),
 \end{equation}
