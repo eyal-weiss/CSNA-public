@@ -324,6 +324,7 @@ CSNA additionally tunes temperature $\tau \in \{0.1, 0.5, 1.0, 2.0\}$.
 All models use 2 layers, dropout 0.5, Adam with weight decay $5 \times 10^{-4}$, and early stopping (patience 50, max 300 epochs).
 We save the checkpoint with best validation accuracy and evaluate it \emph{once} on test.
 We report mean accuracy over 10 splits.
+We report classification accuracy (fraction of correctly labeled test nodes), averaged over the 10 splits, with standard deviation reflecting split-to-split variability.
 CSNA here is the lite version ($g_{ij}$ only, no sampling).
 Complete details in \Cref{app:repro}.
 
