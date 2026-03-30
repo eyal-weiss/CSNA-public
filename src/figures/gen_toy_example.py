@@ -157,7 +157,7 @@ ax1.legend(handles=handles_left, loc="lower center", fontsize=7,
            ncol=2, framealpha=0.9, edgecolor="#CCCCCC",
            bbox_to_anchor=(0.5, -0.08))
 
-out_dir = os.path.join(os.path.dirname(__file__), "..", "paper", "figures")
+out_dir = os.path.join(os.path.dirname(__file__), "..", "..", "paper", "figures")
 os.makedirs(out_dir, exist_ok=True)
 out_path = os.path.join(out_dir, "toy_example.pdf")
 fig.savefig(out_path, dpi=300, bbox_inches="tight", facecolor="white")

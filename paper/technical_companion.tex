@@ -1,0 +1,1191 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{bm}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{tcolorbox}
+\usepackage{parskip}
+
+% tcolorbox for examples
+\tcbuselibrary{breakable}
+\newtcolorbox{example}[1][]{
+  colback=blue!3,
+  colframe=blue!40!black,
+  fonttitle=\bfseries,
+  title=Numerical Example,
+  breakable,
+  #1
+}
+
+\newtcolorbox{keyidea}[1][]{
+  colback=green!3,
+  colframe=green!40!black,
+  fonttitle=\bfseries,
+  title=Key Idea,
+  breakable,
+  #1
+}
+
+\newtcolorbox{warning}[1][]{
+  colback=red!3,
+  colframe=red!40!black,
+  fonttitle=\bfseries,
+  title=Watch Out,
+  breakable,
+  #1
+}
+
+% Custom commands matching the paper
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\N}{\mathcal{N}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\G}{\mathcal{G}}
+\newcommand{\bW}{\mathbf{W}}
+\newcommand{\bx}{\mathbf{x}}
+\newcommand{\bh}{\mathbf{h}}
+
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}[section]
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+
+\title{\textbf{Technical Companion to}\\[4pt]
+\emph{Cost-Sensitive Neighborhood Aggregation\\for Heterophilous Graphs}\\[10pt]
+{\large A Self-Contained Guide for CS Undergraduates}}
+
+\author{Companion to the paper by Eyal Weiss}
+
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This document explains every equation and technical concept in the CSNA paper
+in detail, assuming only undergraduate-level linear algebra, probability,
+optimization, and graph theory.
+No prior knowledge of graph neural networks, message passing, or GNN notation is
+required.
+Each equation is accompanied by (1) a plain-English description of what it computes,
+(2) a symbol-by-symbol breakdown, (3) an intuitive explanation of why the
+computation makes sense, and (4) a concrete numerical example where helpful.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+%% ================================================================
+\section{Background: Graphs, Features, and the Classification Problem}
+\label{sec:background}
+%% ================================================================
+
+\subsection{What Is a Graph in This Context?}
+
+A \textbf{graph} $\G = (V, E)$ consists of:
+\begin{itemize}
+  \item A set of \textbf{nodes} $V$ with $n = |V|$ nodes, numbered $1, 2, \ldots, n$.
+    Each node represents an entity---a webpage, a Wikipedia article, an actor, etc.
+  \item A set of \textbf{edges} $E \subseteq V \times V$.
+    An edge $(i, j) \in E$ means nodes $i$ and $j$ are connected (e.g., there is
+    a hyperlink between two webpages).
+    The graph is \emph{undirected}: if $(i,j) \in E$, then $(j,i) \in E$.
+\end{itemize}
+
+Every node $i$ carries two pieces of information:
+
+\begin{enumerate}
+  \item A \textbf{feature vector} $\bx_i \in \R^d$.
+    This is a list of $d$ real numbers that describe the node.
+    For webpages, the features might encode word frequencies; for actors, they
+    might encode genre co-occurrences.
+    We stack all feature vectors into a \textbf{feature matrix}
+    $\mathbf{X} \in \R^{n \times d}$, where row $i$ is $\bx_i$.
+
+  \item A \textbf{label} $y_i \in \{1, 2, \ldots, C\}$.
+    This is the class or category of the node.
+    The goal of \textbf{node classification} is to predict the label of each node
+    using its features and the graph structure.
+    During training, we know the labels of some nodes; at test time, we must
+    predict the labels of the rest.
+\end{enumerate}
+
+\begin{example}
+Suppose we have 4 nodes (webpages) with 3-dimensional features and 2 classes (``student page'' vs.\ ``faculty page''):
+
+\begin{center}
+\begin{tabular}{cccc}
+\toprule
+Node & Features $\bx_i$ & Label $y_i$ & Neighbors \\
+\midrule
+1 & $[1, 0, 3]$ & 1 (student) & $\{2, 3\}$ \\
+2 & $[1, 0, 1]$ & 1 (student) & $\{1, 4\}$ \\
+3 & $[0, 5, 2]$ & 2 (faculty) & $\{1, 4\}$ \\
+4 & $[0, 4, 1]$ & 2 (faculty) & $\{2, 3\}$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Here $n = 4$, $d = 3$, $C = 2$.
+Nodes 1 and 2 (students) are connected to each other,
+but they are also connected to faculty nodes---this graph has significant heterophily.
+\end{example}
+
+
+\subsection{Edge Homophily Ratio $\mathcal{H}$}
+\label{sec:homophily}
+
+\begin{keyidea}
+Homophily measures how often connected nodes share the same label.
+High homophily means ``birds of a feather flock together''; low homophily
+(heterophily) means connected nodes tend to differ.
+\end{keyidea}
+
+The \textbf{edge homophily ratio} is defined as:
+\[
+  \mathcal{H} = \frac{|\{(i,j) \in E : y_i = y_j\}|}{|E|}
+\]
+
+\textbf{What it computes:}
+Count the number of edges whose endpoints share the same label, and divide by
+the total number of edges.
+
+\textbf{Symbol breakdown:}
+\begin{itemize}[nosep]
+  \item $\{(i,j) \in E : y_i = y_j\}$ --- the set of edges where both endpoints
+    have the same label.
+  \item $|\cdot|$ denotes set cardinality (the number of elements).
+  \item $|E|$ is the total number of edges.
+\end{itemize}
+
+\textbf{Range and interpretation:}
+\begin{itemize}[nosep]
+  \item $\mathcal{H} = 1$: every edge connects same-label nodes (\textbf{perfect homophily}).
+  \item $\mathcal{H} = 0$: every edge connects different-label nodes
+    (\textbf{perfect heterophily}).
+  \item $\mathcal{H} \approx 0.5$: edges are roughly random with respect to labels.
+  \item $\mathcal{H} < 0.5$: the graph is \textbf{heterophilous}---connected
+    nodes tend to differ in label.
+\end{itemize}
+
+\begin{example}
+In the 4-node graph above, the edges are $\{(1,2), (1,3), (2,4), (3,4)\}$.
+\begin{itemize}[nosep]
+  \item Edge $(1,2)$: both students $\to$ same label.
+  \item Edge $(1,3)$: student--faculty $\to$ different label.
+  \item Edge $(2,4)$: student--faculty $\to$ different label.
+  \item Edge $(3,4)$: both faculty $\to$ same label.
+\end{itemize}
+Same-label edges: 2 out of 4 total, so $\mathcal{H} = 2/4 = 0.5$.
+
+Now suppose we remove edge $(1,2)$ and add edge $(1,4)$ instead.
+Then all 4 edges are cross-class, giving $\mathcal{H} = 0/4 = 0$---perfect heterophily.
+
+The datasets in the paper have $\mathcal{H}$ between 0.09 and 0.23, meaning that
+fewer than 1 in 4 edges connect same-class nodes.
+\end{example}
+
+
+\subsection{Message Passing (Equation 1)}
+\label{sec:message_passing}
+
+\textbf{Message passing} is the fundamental operation of Graph Neural Networks (GNNs).
+The idea is simple: to update node $i$'s representation, \emph{collect information
+from its neighbors, combine it, and transform the result}.
+
+The paper's Equation~1 defines one round of message passing:
+\begin{equation}
+  \bh_i^{(\ell+1)} = \sigma\!\Bigl(\sum_{j \in \N(i)} \alpha_{ij}\, \bW^{(\ell)}\, \bh_j^{(\ell)}\Bigr)
+  \tag{Eq.~1}
+\end{equation}
+
+\textbf{What it computes in plain English:}
+To get node $i$'s new representation at layer $\ell+1$, do the following: for each
+neighbor $j$ (including $i$ itself), transform $j$'s current representation by the
+weight matrix $\bW$, scale it by a weight $\alpha_{ij}$, sum all these contributions,
+and pass the result through a nonlinear activation function.
+
+\textbf{Symbol-by-symbol breakdown:}
+\begin{itemize}
+  \item $\bh_j^{(\ell)} \in \R^d$: the \textbf{representation} (also called
+    ``embedding'' or ``hidden state'') of node $j$ at layer $\ell$.
+    At layer 0, $\bh_j^{(0)} = \bx_j$ (the raw features).
+    After each layer, representations are updated.
+
+  \item $\bW^{(\ell)} \in \R^{d' \times d}$: a \textbf{learnable weight matrix}
+    at layer $\ell$.
+    This is the neural network's set of parameters---values that are adjusted
+    during training to minimize classification error.
+    It transforms a $d$-dimensional vector into a $d'$-dimensional vector.
+    Multiplication $\bW^{(\ell)} \bh_j^{(\ell)}$ is a standard matrix--vector
+    product, producing a vector in $\R^{d'}$.
+
+  \item $\N(i)$: the \textbf{neighborhood} of node $i$, including $i$ itself
+    (via a self-loop).
+    If node $i$ has edges to nodes 2, 5, and 7, then $\N(i) = \{i, 2, 5, 7\}$.
+
+  \item $\alpha_{ij} \in \R$: the \textbf{aggregation weight} for the message from
+    $j$ to $i$.
+    This controls how much influence neighbor $j$ has on node $i$'s updated
+    representation.
+    In the simplest GNN (GCN), $\alpha_{ij} = 1/\sqrt{d_i \cdot d_j}$ where $d_i$
+    is the degree of node $i$---essentially an average.
+    More sophisticated GNNs learn these weights (like attention in GAT).
+
+  \item $\sum_{j \in \N(i)}$: the \textbf{aggregation step}---sum over all
+    neighbors (including self).
+
+  \item $\sigma(\cdot)$: a \textbf{nonlinear activation function}, such as
+    ReLU ($\sigma(x) = \max(0, x)$, applied element-wise).
+    Without nonlinearity, stacking multiple layers would collapse to a single
+    linear transformation.
+\end{itemize}
+
+\begin{example}
+Suppose node 1 has neighbors $\N(1) = \{1, 2, 3\}$ with representations:
+\[
+  \bh_1^{(0)} = [1, 0],\quad \bh_2^{(0)} = [0, 2],\quad \bh_3^{(0)} = [1, 1]
+\]
+and the weight matrix is $\bW = \begin{bmatrix} 1 & 0 \\ 0 & 1 \end{bmatrix}$
+(identity, for simplicity),
+with uniform weights $\alpha_{ij} = 1/3$ for all $j$.
+
+Then:
+\begin{align*}
+  \bh_1^{(1)} &= \sigma\!\left(\tfrac{1}{3}\bW[1,0]^\top + \tfrac{1}{3}\bW[0,2]^\top
+    + \tfrac{1}{3}\bW[1,1]^\top\right) \\
+  &= \sigma\!\left(\tfrac{1}{3}[1,0] + \tfrac{1}{3}[0,2] + \tfrac{1}{3}[1,1]\right) \\
+  &= \sigma\!\left([2/3,\; 1]\right) = [2/3,\; 1] \quad\text{(using ReLU)}
+\end{align*}
+
+The new representation of node 1 is the average of its neighbors' (transformed)
+features, passed through ReLU.
+\end{example}
+
+
+\subsection{Why Homophily Makes Aggregation Work---and Heterophily Breaks It}
+\label{sec:why_homo_works}
+
+\begin{keyidea}
+If your neighbors mostly share your label, averaging their features reinforces
+your class identity.
+If your neighbors mostly have a different label, averaging their features
+\emph{dilutes} or \emph{overwrites} your class identity.
+\end{keyidea}
+
+Imagine you are a student node with features that ``look like a student.''
+Your neighbors are:
+
+\textbf{Homophilous case ($\mathcal{H}$ high):}
+Most neighbors are also students.
+Averaging their features produces something that still looks like a student---possibly
+an even cleaner signal because noise averages out.
+After aggregation, student nodes become \emph{more} similar to each other and
+\emph{more} distinct from faculty nodes.
+Classification is easy.
+
+\textbf{Heterophilous case ($\mathcal{H}$ low):}
+Most neighbors are faculty.
+Averaging their features produces something that looks like a mix of student and
+faculty---or even more like faculty than student.
+After aggregation, your representation has been \emph{pulled toward} the other
+class.
+Student and faculty representations become harder to distinguish.
+Classification suffers.
+
+This is why, on highly heterophilous graphs (like Texas with $\mathcal{H} = 0.09$),
+a simple Multi-Layer Perceptron (MLP) that \emph{ignores the graph entirely}
+often outperforms standard GNNs: it is better to use only your own features
+than to average in features from mostly-wrong-class neighbors.
+
+The CSNA paper's central question is:
+\emph{Can we design smarter aggregation weights that avoid this dilution?}
+
+
+%% ================================================================
+\section{The CSNA Method: Step by Step}
+\label{sec:method}
+%% ================================================================
+
+CSNA (Cost-Sensitive Neighborhood Aggregation) modifies message passing by
+assigning each edge an individualized weight based on how similar the two
+endpoints look in a learned projection space.
+We now walk through each step.
+
+
+\subsection{Step 1: The Learned Projection $\bW_g$}
+\label{sec:projection}
+
+Before measuring how similar two nodes are, CSNA first \emph{projects} their
+representations into a new space using a learned matrix $\bW_g$.
+
+\textbf{Why not just compare the raw representations?}
+Raw features live in a high-dimensional space (e.g., $d = 1703$ for the webpage
+datasets) where many dimensions may be irrelevant to class identity.
+Two students might differ wildly in raw features (one's page discusses algorithms,
+another discusses databases), but in a well-chosen lower-dimensional projection,
+the class-relevant signal is amplified and the irrelevant variation is discarded.
+
+This is analogous to dimensionality reduction techniques like PCA, but here the
+projection $\bW_g \in \R^{d' \times d}$ is \emph{learned end-to-end} via
+backpropagation---the neural network discovers which projection makes same-class
+nodes look similar and different-class nodes look different.
+
+
+\subsection{Step 2: Edge Cost --- Observed Divergence $g_{ij}$ (Equation 3)}
+\label{sec:gij}
+
+\begin{equation}
+  g_{ij}^{(\ell)} = \|\bW_g\, \bh_i^{(\ell)} - \bW_g\, \bh_j^{(\ell)}\|_2
+  \tag{Eq.~3}
+\end{equation}
+
+\textbf{What it computes:}
+The Euclidean (L2) distance between node $i$ and node $j$ after both are projected
+into the learned space.
+
+\textbf{Symbol breakdown:}
+\begin{itemize}
+  \item $\bh_i^{(\ell)} \in \R^d$: node $i$'s representation at layer $\ell$.
+  \item $\bW_g \in \R^{d' \times d}$: the learned projection matrix.
+    $d'$ is typically smaller than $d$ (e.g., 64 vs.\ 1703).
+  \item $\bW_g \bh_i^{(\ell)} \in \R^{d'}$: node $i$'s projected representation.
+  \item $\bW_g \bh_i^{(\ell)} - \bW_g \bh_j^{(\ell)} \in \R^{d'}$: the difference
+    vector between the two projected representations.
+  \item $\|\cdot\|_2$: the L2 (Euclidean) norm, i.e.,
+    $\|\mathbf{v}\|_2 = \sqrt{v_1^2 + v_2^2 + \cdots + v_{d'}^2}$.
+  \item $g_{ij}^{(\ell)} \geq 0$: a non-negative scalar. Low $g_{ij}$ means
+    ``these nodes look similar in the projection'' (likely same class);
+    high $g_{ij}$ means ``these nodes look different'' (likely different class).
+\end{itemize}
+
+\textbf{Why ``observed divergence''?}
+The paper calls $g_{ij}$ the ``observed divergence'' because it is computed
+directly from the observed (current) representations---no additional learned
+scoring function is needed.
+It is a direct measurement of how far apart $i$ and $j$ appear to be.
+
+\begin{example}
+Suppose $d' = 2$ and the projected representations are:
+\[
+  \bW_g \bh_1 = [3, 1], \quad \bW_g \bh_2 = [3, 0], \quad \bW_g \bh_3 = [0, 4]
+\]
+Then:
+\begin{align*}
+  g_{12} &= \|[3,1] - [3,0]\|_2 = \|[0, 1]\|_2 = 1 \quad\text{(small: similar)}\\
+  g_{13} &= \|[3,1] - [0,4]\|_2 = \|[3, -3]\|_2 = \sqrt{9+9} = \sqrt{18} \approx 4.24 \quad\text{(large: different)}
+\end{align*}
+
+If nodes 1 and 2 are same-class and node 3 is a different class, the projection
+has successfully made same-class nodes close and different-class nodes far apart.
+\end{example}
+
+
+\subsection{Step 3: The Sigmoid Concordance Score $s_{ij}$ (Equation 4)}
+\label{sec:concordance}
+
+\begin{equation}
+  s_{ij}^{(\ell)} = \sigma\!\left(\frac{-g_{ij}^{(\ell)}}{\tau}\right) \in (0, 1)
+  \tag{Eq.~4}
+\end{equation}
+
+\textbf{What it computes:}
+Converts the distance $g_{ij}$ into a ``concordance score'' between 0 and 1.
+High score ($s_{ij} \approx 1$) means the edge is likely \textbf{concordant}
+(same class); low score ($s_{ij} \approx 0$) means it is likely \textbf{discordant}
+(different class).
+
+\textbf{Symbol breakdown:}
+\begin{itemize}
+  \item $g_{ij}^{(\ell)} \geq 0$: the distance from Eq.~3.
+  \item $\tau > 0$: a \textbf{temperature} hyperparameter that controls the
+    sharpness of the sigmoid.
+    Tuned from $\{0.1, 0.5, 1.0, 2.0\}$ in experiments.
+  \item $-g_{ij}/\tau$: a non-positive number. The minus sign means that
+    \emph{larger distance $\to$ more negative input $\to$ lower sigmoid output}.
+  \item $\sigma(z) = 1/(1 + e^{-z})$: the \textbf{sigmoid function},
+    which maps any real number to $(0, 1)$.
+\end{itemize}
+
+\textbf{Why the sigmoid?}
+The sigmoid provides a smooth, differentiable mapping from distance to a score
+in $(0, 1)$, which is needed for two reasons:
+(1) we need a probabilistic-style weight to split messages between two channels,
+and (2) the function must be differentiable so gradients can flow back to $\bW_g$
+during training.
+
+\textbf{What does temperature $\tau$ control?}
+\begin{itemize}[nosep]
+  \item Small $\tau$ (e.g., 0.1): the sigmoid transition is \emph{sharp}.
+    Even a small distance produces $s_{ij} \approx 0$ (hard routing).
+  \item Large $\tau$ (e.g., 2.0): the sigmoid transition is \emph{gradual}.
+    Moderate distances still produce $s_{ij}$ near 0.5 (soft routing).
+\end{itemize}
+Think of $\tau$ as controlling how ``decisive'' the routing is.
+
+\begin{example}
+Continuing from the previous example with $\tau = 1$:
+\begin{align*}
+  s_{12} &= \sigma(-1/1) = \sigma(-1) = \frac{1}{1 + e^{1}} \approx \frac{1}{1 + 2.72} \approx 0.27 \\
+  s_{13} &= \sigma(-4.24/1) = \sigma(-4.24) = \frac{1}{1 + e^{4.24}} \approx \frac{1}{1 + 69.4} \approx 0.014
+\end{align*}
+
+Node pair (1,2) gets concordance 0.27 (moderate---could be same class),
+while pair (1,3) gets concordance 0.014 (very low---likely different class).
+
+With $\tau = 0.1$: $s_{12} = \sigma(-10) \approx 0.00005$ and
+$s_{13} = \sigma(-42.4) \approx 0$. Even the moderately-close pair gets near-zero
+concordance---sharp temperature leaves little room for nuance.
+
+With $\tau = 5$: $s_{12} = \sigma(-0.2) \approx 0.45$ and
+$s_{13} = \sigma(-0.85) \approx 0.30$. Both scores are moderate---soft temperature
+makes the routing very gentle.
+
+Note: $s_{ii} = \sigma(0/\tau) = \sigma(0) = 0.5$ for self-loops, since $g_{ii} = 0$.
+\end{example}
+
+
+\subsection{Softmax Normalization of Weights}
+\label{sec:softmax}
+
+Before using the concordance scores as aggregation weights, they are normalized
+using the \textbf{softmax} function, computed \emph{per node}:
+\[
+  \tilde{s}_{ij} = \mathrm{softmax}_{j \in \N(i)}(s_{ij})
+  = \frac{\exp(s_{ij})}{\sum_{k \in \N(i)} \exp(s_{ik})}
+\]
+Similarly, the discordance weights use $1 - s_{ij}$:
+\[
+  \tilde{d}_{ij} = \mathrm{softmax}_{j \in \N(i)}(1 - s_{ij})
+  = \frac{\exp(1 - s_{ij})}{\sum_{k \in \N(i)} \exp(1 - s_{ik})}
+\]
+
+\textbf{What softmax does here:}
+For each node $i$, softmax converts the raw concordance scores of all its
+neighbors into a probability distribution that sums to 1.
+Neighbors with higher concordance get a larger share of the total weight in
+the concordant channel; neighbors with higher discordance ($1 - s_{ij}$) get
+a larger share in the discordant channel.
+
+\textbf{Why normalize per node?}
+Without normalization, a node with many neighbors would accumulate a much larger
+aggregated signal than a node with few neighbors.
+Per-node softmax ensures every node's aggregated representation is a weighted
+\emph{average} (weights summing to 1) of its neighbors, regardless of degree.
+
+\textbf{Why softmax instead of simple division?}
+Softmax amplifies differences: if one neighbor has concordance 0.9 and
+another has 0.2, softmax gives the first neighbor a disproportionately large
+share (because $\exp(0.9) \gg \exp(0.2)$).
+Simple normalization ($s_{ij} / \sum_k s_{ik}$) would produce more uniform weights.
+
+\begin{example}
+Suppose node 1 has three neighbors (including itself) with concordance scores:
+\[
+  s_{11} = 0.5, \quad s_{12} = 0.4, \quad s_{13} = 0.05
+\]
+Softmax for the concordant channel:
+\begin{align*}
+  \exp(0.5) &\approx 1.649, \quad \exp(0.4) \approx 1.492, \quad \exp(0.05) \approx 1.051 \\
+  \text{Sum} &= 1.649 + 1.492 + 1.051 = 4.192 \\
+  \tilde{s}_{11} &= 1.649/4.192 \approx 0.393 \\
+  \tilde{s}_{12} &= 1.492/4.192 \approx 0.356 \\
+  \tilde{s}_{13} &= 1.051/4.192 \approx 0.251
+\end{align*}
+
+Discordant channel uses $1 - s_{ij}$: values are $0.5, 0.6, 0.95$.
+\begin{align*}
+  \exp(0.5) &\approx 1.649, \quad \exp(0.6) \approx 1.822, \quad \exp(0.95) \approx 2.586 \\
+  \text{Sum} &= 1.649 + 1.822 + 2.586 = 6.057 \\
+  \tilde{d}_{11} &\approx 0.272, \quad
+  \tilde{d}_{12} \approx 0.301, \quad
+  \tilde{d}_{13} \approx 0.427
+\end{align*}
+
+Notice: in the concordant channel, the self-loop and same-class neighbor (node 2)
+get the most weight.
+In the discordant channel, the different-class neighbor (node 3) gets the most weight.
+The channels emphasize different parts of the neighborhood.
+\end{example}
+
+
+\subsection{Step 4: Dual-Channel Aggregation (Equations 5--6)}
+\label{sec:dual_channel}
+
+\begin{align}
+  \bh_i^{\text{con}} &= \sum_{j \in \N(i)} \tilde{s}_{ij}\, \bW_{\text{con}}\, \bh_j^{(\ell)}
+  \tag{Eq.~5} \\[6pt]
+  \bh_i^{\text{dis}} &= \sum_{j \in \N(i)} \tilde{d}_{ij}\, \bW_{\text{dis}}\, \bh_j^{(\ell)}
+  \tag{Eq.~6}
+\end{align}
+
+\textbf{What they compute:}
+Two separate aggregated representations for node $i$:
+\begin{itemize}
+  \item $\bh_i^{\text{con}}$ (\textbf{concordant channel}): a weighted sum of
+    neighbors' features, where likely-same-class neighbors contribute more.
+    Transformed by $\bW_{\text{con}}$.
+  \item $\bh_i^{\text{dis}}$ (\textbf{discordant channel}): a weighted sum where
+    likely-different-class neighbors contribute more.
+    Transformed by a \emph{different} matrix $\bW_{\text{dis}}$.
+\end{itemize}
+
+\textbf{Symbol breakdown:}
+\begin{itemize}
+  \item $\tilde{s}_{ij}$: the softmax-normalized concordance weight (a scalar
+    between 0 and 1, summing to 1 over $j$).
+  \item $\tilde{d}_{ij}$: the softmax-normalized discordance weight.
+  \item $\bW_{\text{con}} \in \R^{d' \times d}$: weight matrix for the concordant
+    channel.
+  \item $\bW_{\text{dis}} \in \R^{d' \times d}$: weight matrix for the discordant
+    channel.
+  \item $\bh_j^{(\ell)} \in \R^d$: neighbor $j$'s current representation.
+  \item $\bh_i^{\text{con}}, \bh_i^{\text{dis}} \in \R^{d'}$: the resulting
+    channel representations for node $i$.
+\end{itemize}
+
+\begin{keyidea}[title=Why Two DIFFERENT Weight Matrices Matter]
+This is the heart of CSNA's design. The concordant and discordant channels use
+\emph{independent} weight matrices $\bW_{\text{con}}$ and $\bW_{\text{dis}}$.
+
+Why? Because same-class neighbors carry a fundamentally different type of
+information than different-class neighbors:
+
+\begin{itemize}[nosep]
+  \item \textbf{Same-class neighbors} reinforce your identity. Their features,
+    when transformed by $\bW_{\text{con}}$, should produce representations that
+    sharpen your class signal. The concordant transformation might learn to
+    extract and amplify class-specific features.
+
+  \item \textbf{Different-class neighbors} carry complementary (or
+    contradictory) information. Their features, when transformed by
+    $\bW_{\text{dis}}$, might be used in a ``negative'' sense: ``if my
+    different-class neighbors look like X, then I am probably not-X.''
+    The discordant transformation can learn to extract useful contrast
+    information.
+\end{itemize}
+
+If both channels used the same $\bW$, there would be no way to treat the two
+types of information differently---the model would collapse to standard
+weighted aggregation.
+\end{keyidea}
+
+
+\subsection{Step 5: The Gating Mechanism (Equation 7)}
+\label{sec:gating}
+
+\begin{equation}
+  \bh_i^{(\ell+1)} = \sum_{k \in \{\text{con}, \text{dis}, \text{self}\}}
+  \gamma_k(\bh_i) \cdot \bh_i^{k}
+  \tag{Eq.~7}
+\end{equation}
+where:
+\[
+  \bh_i^{\text{self}} = \bW_{\text{self}}\, \bh_i^{(\ell)}
+\]
+\[
+  \gamma(\bh_i) = \mathrm{softmax}\bigl(\bW_\gamma\, [\bh_i^{\text{con}} \| \bh_i^{\text{dis}} \| \bh_i^{\text{self}}]\bigr) \in \R^3
+\]
+
+\textbf{What it computes:}
+The final updated representation of node $i$ is a weighted combination of three
+ingredients:
+\begin{enumerate}[nosep]
+  \item $\bh_i^{\text{con}}$: what likely-same-class neighbors say (concordant channel).
+  \item $\bh_i^{\text{dis}}$: what likely-different-class neighbors say (discordant channel).
+  \item $\bh_i^{\text{self}}$: what the node itself says (ego channel, ignoring
+    the graph).
+\end{enumerate}
+The gate weights $\gamma_{\text{con}}, \gamma_{\text{dis}}, \gamma_{\text{self}}$
+determine the mixing proportions, and they \emph{depend on the node's own
+representation}---different nodes can rely on different channels.
+
+\textbf{Symbol breakdown:}
+\begin{itemize}
+  \item $\bW_{\text{self}} \in \R^{d' \times d}$: weight matrix for the ego
+    (self) channel. This transforms the node's own representation without
+    any neighbor information.
+  \item $[\bh_i^{\text{con}} \| \bh_i^{\text{dis}} \| \bh_i^{\text{self}}] \in \R^{3d'}$:
+    the concatenation of all three channel outputs.
+    If each channel produces a 64-dimensional vector, this is a 192-dimensional
+    vector.
+  \item $\bW_\gamma \in \R^{3 \times 3d'}$: a small weight matrix that produces
+    3 scores (one per channel) from the concatenated representation.
+  \item $\mathrm{softmax}(\cdot) \in \R^3$: converts the 3 raw scores into a
+    probability distribution: $\gamma_{\text{con}} + \gamma_{\text{dis}} +
+    \gamma_{\text{self}} = 1$, with each $\gamma_k \geq 0$.
+  \item The final output is: $\gamma_{\text{con}} \cdot \bh_i^{\text{con}} +
+    \gamma_{\text{dis}} \cdot \bh_i^{\text{dis}} +
+    \gamma_{\text{self}} \cdot \bh_i^{\text{self}}$.
+\end{itemize}
+
+\textbf{Why per-node gating?}
+Different nodes benefit from different information sources.
+A node surrounded by mostly-same-class neighbors should rely on the concordant
+channel. A node with many different-class neighbors that carry useful contrast
+information should lean toward the discordant channel. A node whose neighbors
+are uninformative should fall back to its own features (self channel).
+The per-node gate learns to make this decision for each node individually.
+
+\textbf{Why softmax over 3 channels?}
+Softmax ensures the gate weights are non-negative and sum to 1, so the output is
+a convex combination of the three channel representations.
+This prevents any channel from having negative influence (which could destabilize
+training) and ensures the output scale stays bounded.
+
+\begin{example}
+Suppose for node $i$ the gate logits are $[1.0, -0.5, 2.0]$:
+\begin{align*}
+  \gamma &= \mathrm{softmax}([1.0, -0.5, 2.0]) \\
+  &= \frac{1}{e^{1.0} + e^{-0.5} + e^{2.0}} [e^{1.0}, e^{-0.5}, e^{2.0}] \\
+  &\approx \frac{1}{2.72 + 0.61 + 7.39}[2.72, 0.61, 7.39] \\
+  &\approx [0.254, 0.057, 0.689]
+\end{align*}
+
+This node relies 69\% on its own features, 25\% on the concordant channel,
+and only 6\% on the discordant channel---similar to an MLP with a small
+graph-based correction.
+
+On the Wisconsin and Actor datasets, the paper reports that CSNA learns
+$\gamma_{\text{self}} = 1.0$ for all nodes, effectively ignoring the graph
+entirely and reducing to an MLP.
+\end{example}
+
+
+\subsection{The Extended Variant: $f = g + h$ (Equation 8)}
+\label{sec:extended}
+
+\begin{equation}
+  f_{ij}^{(\ell)} = g_{ij}^{(\ell)} + h_{ij}^{(\ell)}, \quad\text{where}\quad
+  h_{ij}^{(\ell)} = \mathrm{softplus}\bigl(\mathbf{a}^\top [\bW_g \bh_i^{(\ell)} \| \bW_g \bh_j^{(\ell)}]\bigr)
+  \tag{Eq.~8}
+\end{equation}
+
+\textbf{What it computes:}
+An enriched edge cost that adds a \emph{learned asymmetric} component $h_{ij}$
+on top of the observed divergence $g_{ij}$.
+In the default ``lite'' variant, $f_{ij} = g_{ij}$ (no $h$ component).
+In the ``extended'' variant, $f_{ij} = g_{ij} + h_{ij}$ replaces $g_{ij}$ in the
+concordance formula (Eq.~4).
+
+\textbf{Symbol breakdown:}
+\begin{itemize}
+  \item $g_{ij}$: the observed divergence from Eq.~3 (L2 distance in projection space).
+  \item $[\bW_g \bh_i \| \bW_g \bh_j] \in \R^{2d'}$: the \textbf{concatenation}
+    of $i$'s and $j$'s projected representations.
+    If each projected representation is 64-dimensional, this is a 128-dimensional
+    vector.
+  \item $\mathbf{a} \in \R^{2d'}$: a learnable parameter vector.
+  \item $\mathbf{a}^\top [\cdot] \in \R$: a dot product, producing a single scalar.
+    This is essentially a learned linear scoring function on the pair $(i, j)$.
+  \item $\mathrm{softplus}(z) = \ln(1 + e^z)$: a smooth, always-positive activation function.
+    It ensures $h_{ij} \geq 0$, so that $h$ can only \emph{increase} the total
+    cost (never decrease it below $g_{ij}$).
+  \item $f_{ij} = g_{ij} + h_{ij} \geq g_{ij} \geq 0$: the combined cost.
+\end{itemize}
+
+\textbf{What does $h_{ij}$ add?}
+The observed divergence $g_{ij}$ is symmetric ($g_{ij} = g_{ji}$) and purely
+distance-based---it only knows \emph{how far apart} two nodes are.
+The learned component $h_{ij}$ can capture more complex patterns by looking at
+the actual values of the projected representations (not just their difference).
+The concatenation $[\bW_g \bh_i \| \bW_g \bh_j]$ lets $\mathbf{a}$ learn
+different roles for the source and target node features.
+
+\textbf{Why softplus for non-negativity?}
+The cost function should not be able to ``cancel out'' the observed divergence.
+If $h_{ij}$ could be negative, it could make two distant nodes appear close
+(cost near zero), defeating the purpose of measuring divergence.
+Softplus ensures $h_{ij} > 0$, so the learned component can only add cost, not
+subtract it.
+
+\textbf{Practical impact:}
+In the paper's experiments, the extended variant wins clearly only on Wisconsin
+(84.1\% vs.\ 79.6\%) and is comparable or slightly worse on all other datasets.
+The lite version (just $g_{ij}$) is the default because the added parameters
+of $h_{ij}$ risk overfitting on the small datasets in the benchmark suite.
+
+
+\subsection{Calibration Loss (Equation 9)}
+\label{sec:calibration}
+
+\begin{equation}
+  \mathcal{L}_{\text{cal}} = \frac{1}{|E_{\text{train}}|}
+  \sum_{(i,j) \in E_{\text{train}}}
+  \bigl[\mathrm{ReLU}(g_{ij} - \mathbb{1}[y_i \neq y_j])\bigr]^2
+  \tag{Eq.~9}
+\end{equation}
+
+\textbf{What it computes:}
+A penalty term that encourages the cost function $g_{ij}$ to assign \emph{low}
+cost to same-class edges.
+It is added to the main classification loss during training.
+
+\textbf{Symbol breakdown:}
+\begin{itemize}
+  \item $E_{\text{train}}$: the set of edges where both endpoints have known labels
+    (i.e., both are in the training set).
+  \item $\mathbb{1}[y_i \neq y_j]$: the \textbf{indicator function}---equals 1
+    if $i$ and $j$ have different labels, and 0 if they have the same label.
+  \item $g_{ij} - \mathbb{1}[y_i \neq y_j]$: the ``excess cost.''
+    \begin{itemize}[nosep]
+      \item For same-class edges ($y_i = y_j$): this equals $g_{ij} - 0 = g_{ij}$.
+        Any positive cost is penalized.
+      \item For different-class edges ($y_i \neq y_j$): this equals $g_{ij} - 1$.
+        Only cost above 1 is penalized (cost up to 1 is ``free'').
+    \end{itemize}
+  \item $\mathrm{ReLU}(z) = \max(0, z)$: clips negative values to zero.
+    Only \emph{excess} cost incurs a penalty.
+  \item $[\cdot]^2$: squared penalty, so larger violations are penalized more heavily.
+  \item The sum is averaged over the number of training edges.
+\end{itemize}
+
+\textbf{What it encourages:}
+\begin{itemize}[nosep]
+  \item Same-class edges: $g_{ij}$ should be as close to 0 as possible
+    (these nodes should look similar in the projection).
+  \item Different-class edges: $g_{ij}$ can be up to 1 without penalty,
+    and is only penalized if it exceeds 1 (preventing extreme costs that
+    could cause numerical issues).
+\end{itemize}
+
+\begin{warning}[title=The Scale Mismatch]
+The indicator $\mathbb{1}[y_i \neq y_j]$ is either 0 or 1, while $g_{ij}$
+(an L2 distance in a learned space) can take any non-negative value---potentially
+much larger than 1.
+This means the regularizer acts as a ``soft'' penalty rather than a precise
+calibration: it pushes same-class costs toward zero but does not enforce
+a specific threshold for different-class edges.
+The paper explicitly notes this scale mismatch.
+\end{warning}
+
+The full training objective is:
+\[
+  \mathcal{L} = \mathcal{L}_{\text{CE}} + \lambda_{\text{cal}} \cdot \mathcal{L}_{\text{cal}}
+\]
+where $\mathcal{L}_{\text{CE}}$ is the standard cross-entropy classification loss and
+$\lambda_{\text{cal}} = 0.1$ is fixed across all experiments.
+
+\begin{example}
+Suppose we have three training edges with costs and labels:
+\begin{center}
+\begin{tabular}{cccc}
+\toprule
+Edge & $g_{ij}$ & Same class? & Penalty contribution \\
+\midrule
+$(1,2)$ & 0.3 & Yes ($\mathbb{1}=0$) & $\mathrm{ReLU}(0.3 - 0)^2 = 0.09$ \\
+$(1,3)$ & 2.5 & No ($\mathbb{1}=1$) & $\mathrm{ReLU}(2.5 - 1)^2 = 2.25$ \\
+$(2,3)$ & 0.8 & No ($\mathbb{1}=1$) & $\mathrm{ReLU}(0.8 - 1)^2 = \mathrm{ReLU}(-0.2)^2 = 0$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+$\mathcal{L}_{\text{cal}} = (0.09 + 2.25 + 0) / 3 = 0.78$.
+
+The penalty comes from two sources: edge $(1,2)$ is same-class but has cost 0.3
+(should be near 0), and edge $(1,3)$ is different-class but has cost 2.5 (above
+the ``free'' threshold of 1).
+Edge $(2,3)$ is different-class with cost 0.8, which is below 1, so no penalty.
+\end{example}
+
+
+\subsection{Architecture Choices}
+\label{sec:architecture}
+
+The paper makes several practical design choices that are worth understanding:
+
+\paragraph{Input MLP.}
+Before the first CSNA layer, the raw features $\mathbf{X}$ are passed through a
+standard Multi-Layer Perceptron (2-layer feedforward network).
+This projects the possibly very high-dimensional features ($d = 1703$) into a
+lower-dimensional space, producing the initial representations $\bh_i^{(0)}$.
+The MLP also introduces nonlinearity, which can help separate classes even before
+any graph information is used.
+
+\paragraph{Residual connections.}
+Between CSNA layers, a \textbf{residual connection} adds the input to the output:
+$\bh_i^{(\ell+1)} = \text{CSNA}(\bh_i^{(\ell)}) + \bh_i^{(\ell)}$.
+This is the same idea as in ResNets: it makes it easy for the network to learn
+the identity function (``do nothing'') if an additional layer would hurt.
+It also helps with gradient flow during training.
+
+\paragraph{Gate bias initialization $[0, 0, 1]$.}
+The gate bias for $\bW_\gamma$ is initialized to $[0, 0, 1]$, which means:
+\[
+  \gamma = \mathrm{softmax}([0, 0, 1]) \approx [0.21, 0.21, 0.58]
+\]
+This favors the \textbf{self (ego) channel} at initialization.
+The model starts behaving approximately like an MLP, which is a reasonable
+baseline on heterophilous graphs.
+During training, the gate can learn to shift weight toward the concordant or
+discordant channels if the graph structure is useful.
+
+Starting from MLP-like behavior is a deliberate safety measure: if the graph
+structure turns out to be harmful (as on some heterophilous datasets), the model
+does not need to ``unlearn'' reliance on bad graph information---it was never
+relying on it in the first place.
+
+
+%% ================================================================
+\section{Theoretical Analysis: When Does Cost-Sensitive Aggregation Help?}
+\label{sec:theory}
+%% ================================================================
+
+The theoretical section of the paper asks: \emph{under what conditions does
+weighting edges by their cost function improve classification over simple
+mean aggregation?}
+To answer this precisely, the analysis uses a synthetic graph model.
+
+
+\subsection{The Contextual Stochastic Block Model (CSBM)}
+\label{sec:csbm}
+
+\begin{definition}[Contextual Stochastic Block Model]
+A graph $\G$ is drawn from $\mathrm{CSBM}(n, 2, p, q, \mu)$:
+\begin{itemize}[nosep]
+  \item $n$ nodes split into two equal classes: $V_+$ (class +1) and $V_-$ (class $-1$),
+    each of size $n/2$.
+  \item Edges are drawn independently at random:
+    \begin{itemize}[nosep]
+      \item Probability $p$ for an edge between two same-class nodes.
+      \item Probability $q$ for an edge between two different-class nodes.
+    \end{itemize}
+  \item Node features: $\bx_i \sim \mathcal{N}(\boldsymbol{\mu}_{y_i}, \mathbf{I}_d)$.
+    \begin{itemize}[nosep]
+      \item Class $+1$ nodes: features are drawn from a Gaussian centered at
+        $\boldsymbol{\mu}_+ = +\frac{\mu}{2}\mathbf{e}_1$.
+      \item Class $-1$ nodes: features are drawn from a Gaussian centered at
+        $\boldsymbol{\mu}_- = -\frac{\mu}{2}\mathbf{e}_1$.
+    \end{itemize}
+\end{itemize}
+\end{definition}
+
+\textbf{What does this model capture?}
+\begin{itemize}
+  \item The \textbf{graph structure} is controlled by $p$ and $q$:
+    \begin{itemize}[nosep]
+      \item $p > q$: homophilous graph (same-class nodes more likely to connect).
+      \item $p < q$: heterophilous graph (different-class nodes more likely to connect).
+      \item $p = q$: random graph (edges independent of class).
+    \end{itemize}
+  \item The \textbf{node features} are noisy observations of class identity.
+    Each node's feature vector is a random draw from a Gaussian whose center
+    depends on the class. The parameter $\mu$ controls the \textbf{signal
+    strength}: large $\mu$ means the two classes have very different mean features;
+    small $\mu$ means the classes are hard to distinguish from features alone.
+  \item $\mathbf{e}_1 = [1, 0, 0, \ldots, 0]$ is the first standard basis vector.
+    The class means differ only in the first coordinate: $\boldsymbol{\mu}_+ -
+    \boldsymbol{\mu}_- = \mu \cdot \mathbf{e}_1$.
+  \item The homophily ratio in this model is $\mathcal{H} = p/(p+q)$.
+\end{itemize}
+
+\begin{example}
+With $n = 100$, $p = 0.1$, $q = 0.4$, $\mu = 2$:
+\begin{itemize}[nosep]
+  \item 50 nodes per class.
+  \item Each node connects to $\sim 0.1 \times 49 \approx 5$ same-class nodes
+    and $\sim 0.4 \times 50 = 20$ different-class nodes.
+  \item Homophily: $\mathcal{H} = 0.1/0.5 = 0.2$---highly heterophilous.
+  \item Features: class +1 nodes have features centered at $[+1, 0, \ldots, 0]$;
+    class $-1$ nodes at $[-1, 0, \ldots, 0]$.
+  \item A typical class +1 node might have features $[1.3, -0.5, 0.2, \ldots]$
+    (noisy version of $[1, 0, 0, \ldots]$).
+\end{itemize}
+\end{example}
+
+
+\subsection{Theorem 1: Signal Distortion Under Mean Aggregation}
+\label{sec:theorem1}
+
+\begin{theorem}[Signal distortion under mean aggregation]
+Let $\G \sim \mathrm{CSBM}(n, 2, p, q, \mu)$ with constant $p, q \in (0,1)$ and $q > p$ (heterophilous).
+After one round of symmetrically normalized aggregation with self-loops, the expected class-mean difference satisfies:
+\begin{equation}
+  \E[\bar{\bh}_+^{(1)} - \bar{\bh}_-^{(1)}]
+  = \frac{p - q}{p + q}(\boldsymbol{\mu}_+ - \boldsymbol{\mu}_-) + O(1/n)
+  \tag{Thm.~1}
+\end{equation}
+\end{theorem}
+
+\textbf{What it says in plain English:}
+After mean aggregation, the class-mean difference is scaled by the signed factor $\lambda = (p-q)/(p+q)$.
+When $q > p$, this factor is \emph{negative}, meaning the class centroids swap sides---their relative direction \emph{reverses}.
+The magnitude $|\lambda|$ is less than 1 (attenuation) whenever $q \neq p$, and is minimized near $p = q$---not in the extreme heterophily limit.
+In fact, when $q \gg p$, $|\lambda| \to 1$: strong heterophily distorts the signal (sign flip) but does not collapse it.
+
+\textbf{Symbol breakdown:}
+\begin{itemize}
+  \item $\bar{\bh}_+^{(1)}$: the mean representation of all class +1 nodes
+    after one layer of aggregation.
+    $\bar{\bh}_+^{(1)} = \frac{2}{n}\sum_{i \in V_+} \bh_i^{(1)}$.
+  \item $\bar{\bh}_-^{(1)}$: same for class $-1$.
+  \item $\bar{\bh}_+^{(1)} - \bar{\bh}_-^{(1)}$: the vector difference
+    between the two class centroids after aggregation.
+  \item $\boldsymbol{\mu}_+ - \boldsymbol{\mu}_-$: the original class-mean
+    difference \emph{before} aggregation.
+  \item $\frac{p-q}{p+q}$: the \textbf{scaling factor}. It is \emph{signed}:
+    negative when $q > p$ (heterophily), positive when $p > q$ (homophily).
+    When negative, the class centroids reverse direction.
+  \item $O(1/n)$: a correction term that absorbs the self-loop contribution
+    (negligible under the dense CSBM where degrees are $\Theta(n)$) and
+    concentration errors.
+\end{itemize}
+
+\textbf{Intuitive explanation:}
+Under mean aggregation, each node's new representation is an average of its
+neighbors' features.
+In a CSBM with $q > p$, a typical node has:
+\begin{itemize}[nosep]
+  \item Fraction $\frac{p}{p+q}$ of same-class neighbors (contributing
+    toward $\boldsymbol{\mu}_+$).
+  \item Fraction $\frac{q}{p+q}$ of different-class neighbors (contributing
+    toward $\boldsymbol{\mu}_-$).
+\end{itemize}
+
+The average representation of a class +1 node becomes:
+\[
+  \frac{p}{p+q}\boldsymbol{\mu}_+ + \frac{q}{p+q}\boldsymbol{\mu}_-
+  = \frac{p-q}{p+q}\boldsymbol{\mu}_+
+\]
+(using $\boldsymbol{\mu}_- = -\boldsymbol{\mu}_+$ in the signal direction).
+
+The class signal $\boldsymbol{\mu}_+$ has been multiplied by
+$\frac{p-q}{p+q}$, which is negative (since $q > p$) and has absolute value less
+than 1.
+The signal has both \emph{shrunk} and \emph{flipped sign}!
+
+\begin{example}
+With $p = 0.1$, $q = 0.4$:
+\[
+  \text{Attenuation factor} = \left(\frac{0.1 - 0.4}{0.1 + 0.4}\right)^2
+  = \left(\frac{-0.3}{0.5}\right)^2 = (-0.6)^2 = 0.36
+\]
+
+The between-class separation shrinks to 36\% of the original.
+Starting from $\mu^2 = 4$ (using $\mu = 2$), after aggregation:
+$\E[\|\bar{\bh}_+ - \bar{\bh}_-\|^2] \approx 0.36 \times 4 = 1.44$.
+
+With extreme heterophily ($p = 0.01$, $q = 0.99$):
+\[
+  \left(\frac{0.01 - 0.99}{0.01 + 0.99}\right)^2 = (-0.98)^2 = 0.9604
+\]
+
+Wait---this is close to 1! The signal is \emph{almost preserved}?
+Yes, but the sign has flipped: class +1 nodes now have representations that
+look like class $-1$ and vice versa. The $(\cdot)^2$ hides the sign flip.
+The linear factor is $\frac{p-q}{p+q} = -0.98$, meaning the class centroids
+have essentially swapped positions.
+A classifier can still separate them, but a naive multi-layer GNN would compound
+the problem at each layer.
+
+The worst case is $q = p$ (random graph): the attenuation factor is 0,
+meaning the class signal is completely destroyed.
+\end{example}
+
+
+\subsection{Theorem 2: Signal Preservation Under Cost-Sensitive Aggregation}
+\label{sec:theorem2}
+
+\begin{theorem}[Cost-sensitive aggregation preserves signal direction]
+Under the same CSBM, suppose an aggregation scheme weights edge $(i,j)$ by $w_{ij}$,
+with:
+\begin{itemize}[nosep]
+  \item $\E[w_{ij} \mid y_i = y_j] = w_+$ (average weight on same-class edges).
+  \item $\E[w_{ij} \mid y_i \neq y_j] = w_-$ (average weight on different-class edges).
+  \item $w_+ > w_- \geq 0$ (same-class edges get higher average weight).
+\end{itemize}
+Then:
+\begin{equation}
+  \E[\bar{\bh}_+^{(1)} - \bar{\bh}_-^{(1)}]
+  = \frac{p\, w_+ - q\, w_-}{p\, w_+ + q\, w_-}(\boldsymbol{\mu}_+ - \boldsymbol{\mu}_-) + O(1/n)
+  \tag{Thm.~2}
+\end{equation}
+
+The scaling factor is positive---preserving the original class direction---if and only if $w_+/w_- > q/p$.
+\end{theorem}
+
+\textbf{What it says in plain English:}
+If you can assign higher weights to same-class edges and lower weights to
+different-class edges, you can control whether the class-mean direction is
+preserved or reversed after aggregation.
+The critical condition is that your weight ratio ($w_+/w_-$) must exceed the
+graph's heterophily ratio ($q/p$) to keep the class centroids on the correct side.
+
+\textbf{Symbol breakdown:}
+\begin{itemize}
+  \item $w_+$: the expected weight assigned to same-class edges. In CSNA,
+    this corresponds to the average concordance score $s_{ij}$ for same-class pairs.
+  \item $w_-$: the expected weight assigned to different-class edges.
+  \item $p\, w_+$: the ``effective contribution'' of same-class edges
+    (edge probability $\times$ weight).
+  \item $q\, w_-$: the ``effective contribution'' of different-class edges.
+  \item The formula replaces $p \to p\, w_+$ and $q \to q\, w_-$ in Theorem~1's
+    formula. Cost-sensitive weighting effectively ``corrects'' the edge probabilities
+    by reweighting them.
+\end{itemize}
+
+\textbf{The condition $w_+/w_- > q/p$---why it is intuitive:}
+
+\begin{keyidea}[title=The Key Condition: $w_+/w_- > q/p$]
+The graph's heterophily is captured by $q/p$: this is how much more likely a
+different-class edge is compared to a same-class edge.
+For example, if $q/p = 4$, there are 4 times as many cross-class edges as
+same-class edges.
+
+Your weighting scheme's discrimination is captured by $w_+/w_-$: how much more
+weight you assign to same-class edges compared to different-class edges.
+
+The condition says: \textbf{your weighting must discriminate edges at least as strongly as
+the graph's heterophily confuses them}, in order to preserve the correct class direction.
+
+If $q/p = 4$, you need $w_+/w_- > 4$---you must assign same-class edges more
+than 4 times the weight of different-class edges.
+The cross-class edges outnumber same-class edges 4-to-1, so your weights must
+compensate by favoring same-class edges by more than 4-to-1.
+
+When the condition holds, the scaling factor is positive: the class centroids stay
+on the correct side.
+When it fails ($w_+/w_- \leq q/p$), the signal direction reverses, just as
+in unweighted mean aggregation.
+\end{keyidea}
+
+\begin{example}
+With $p = 0.1$, $q = 0.4$ (so $q/p = 4$):
+
+\textbf{Mean aggregation} ($w_+ = w_- = 1$):
+\[
+  \text{Factor} = \left(\frac{0.1 \cdot 1 - 0.4 \cdot 1}{0.1 \cdot 1 + 0.4 \cdot 1}\right)^2
+  = \left(\frac{-0.3}{0.5}\right)^2 = 0.36
+\]
+
+\textbf{Cost-sensitive with $w_+ = 5, w_- = 1$} (ratio $w_+/w_- = 5 > 4 = q/p$):
+\[
+  \text{Factor} = \left(\frac{0.1 \cdot 5 - 0.4 \cdot 1}{0.1 \cdot 5 + 0.4 \cdot 1}\right)^2
+  = \left(\frac{0.5 - 0.4}{0.5 + 0.4}\right)^2
+  = \left(\frac{0.1}{0.9}\right)^2 \approx 0.012
+\]
+
+Wait---0.012 is \emph{less} than 0.36! How is this an improvement?
+
+The key is the sign: with mean aggregation, $\frac{p-q}{p+q} = -0.6$
+(the signal \emph{flips}). With cost-sensitive weighting,
+$\frac{pw_+ - qw_-}{pw_+ + qw_-} = +0.11$ (the signal stays in the
+\emph{correct direction}, though it is small).
+
+For classification, the direction matters: a flipped signal at $-0.6$ is
+actually usable (a classifier can learn the flip), but the multi-layer problem
+is that repeated sign flips across layers cause oscillation.
+Cost-sensitive weighting avoids this by keeping the signal in the correct direction.
+
+\textbf{Better cost-sensitive weighting with $w_+ = 10, w_- = 1$}:
+\[
+  \text{Factor} = \left(\frac{1.0 - 0.4}{1.0 + 0.4}\right)^2
+  = \left(\frac{0.6}{1.4}\right)^2 \approx 0.184
+\]
+
+Now the signal retains 18.4\% of its original strength in the correct direction,
+compared to 36\% in the wrong direction under mean aggregation.
+Stronger discrimination ($w_+/w_- = 10$) recovers more of the signal.
+
+\textbf{Perfect oracle with $w_+ = 1, w_- = 0$} (ignore all cross-class edges):
+\[
+  \text{Factor} = \left(\frac{0.1 \cdot 1 - 0.4 \cdot 0}{0.1 \cdot 1 + 0.4 \cdot 0}\right)^2
+  = \left(\frac{0.1}{0.1}\right)^2 = 1.0
+\]
+
+Perfect preservation! If you could perfectly identify and ignore all cross-class
+edges, aggregation would not degrade the signal at all.
+\end{example}
+
+
+\subsection{Connecting the Theory to CSNA}
+\label{sec:theory_connection}
+
+\textbf{How does this apply to CSNA specifically?}
+
+Theorem~2 applies to CSNA's concordant channel with:
+\begin{itemize}[nosep]
+  \item $w_{ij} = s_{ij}$ (the concordance score).
+  \item $w_+ = \E[s_{ij} \mid y_i = y_j]$ (average concordance on same-class edges).
+  \item $w_- = \E[s_{ij} \mid y_i \neq y_j]$ (average concordance on different-class edges).
+\end{itemize}
+
+For the theorem's sign-preservation condition to hold, CSNA's learned cost function
+must assign concordance scores such that $w_+/w_- > q/p$.
+The \textbf{calibration regularizer} (Eq.~9) encourages this by penalizing high costs
+on same-class edges, which pushes $s_{ij}$ higher for same-class pairs and thus
+increases $w_+/w_-$.
+
+\textbf{Important caveat:}
+Theorem~2 is \emph{conditional}---it says what happens \emph{if} the cost function
+achieves good separation ($w_+/w_- > q/p$), but it does not guarantee that CSNA
+\emph{will} learn such separation.
+Also note that the theorem bounds the class-mean difference, not classification accuracy:
+a sign-reversed but well-separated representation can still be corrected by a
+downstream linear classifier.
+Whether CSNA can actually learn a good cost function depends on the data: on
+adversarial-heterophily datasets (Texas, Wisconsin, Cornell), the paper shows
+that CSNA does learn good separation (high AUC for edge-type classification);
+on informative-heterophily datasets (Chameleon, Squirrel), it does not.
+
+
+%% ================================================================
+\section{Summary of Notation}
+\label{sec:notation}
+%% ================================================================
+
+For quick reference, here is a table of all major symbols used in the paper:
+
+\begin{center}
+\small
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{lll}
+\toprule
+\textbf{Symbol} & \textbf{Type / Dimensions} & \textbf{Meaning} \\
+\midrule
+$\G = (V, E)$ & Graph & Undirected graph with nodes $V$ and edges $E$ \\
+$n = |V|$ & Scalar (integer) & Number of nodes \\
+$d$ & Scalar (integer) & Dimension of node features \\
+$d'$ & Scalar (integer) & Dimension of hidden representations \\
+$C$ & Scalar (integer) & Number of classes \\
+$\bx_i \in \R^d$ & Vector & Raw feature vector of node $i$ \\
+$\mathbf{X} \in \R^{n \times d}$ & Matrix & Feature matrix (row $i$ = $\bx_i$) \\
+$y_i \in \{1,\ldots,C\}$ & Scalar (integer) & Class label of node $i$ \\
+$\mathcal{H}$ & Scalar $\in [0,1]$ & Edge homophily ratio \\
+$\N(i)$ & Set of nodes & Neighborhood of $i$ (including $i$) \\
+$\bh_i^{(\ell)} \in \R^d$ & Vector & Node $i$'s representation at layer $\ell$ \\
+$\bW^{(\ell)} \in \R^{d' \times d}$ & Matrix & Learnable weight matrix at layer $\ell$ \\
+$\alpha_{ij}$ & Scalar & Aggregation weight for edge $(i,j)$ \\
+$\sigma(\cdot)$ & Function & Nonlinear activation (ReLU or sigmoid) \\
+$\bW_g \in \R^{d' \times d}$ & Matrix & Learned projection for cost computation \\
+$g_{ij}$ & Scalar $\geq 0$ & Observed divergence (L2 distance in projection) \\
+$\tau$ & Scalar $> 0$ & Temperature for sigmoid concordance \\
+$s_{ij}$ & Scalar $\in (0,1)$ & Concordance score \\
+$\tilde{s}_{ij}$ & Scalar $\in (0,1)$ & Softmax-normalized concordance weight \\
+$\tilde{d}_{ij}$ & Scalar $\in (0,1)$ & Softmax-normalized discordance weight \\
+$\bW_{\text{con}}, \bW_{\text{dis}} \in \R^{d' \times d}$ & Matrices & Channel-specific weight matrices \\
+$\bW_{\text{self}} \in \R^{d' \times d}$ & Matrix & Ego (self) channel weight matrix \\
+$\gamma_k$ & Scalar $\in [0,1]$ & Gate weight for channel $k$ ($\sum_k \gamma_k = 1$) \\
+$\bW_\gamma \in \R^{3 \times 3d'}$ & Matrix & Gate weight matrix \\
+$h_{ij}$ & Scalar $\geq 0$ & Learned cost component (extended variant) \\
+$\mathbf{a} \in \R^{2d'}$ & Vector & Learnable parameter for $h_{ij}$ \\
+$f_{ij}$ & Scalar $\geq 0$ & Total edge cost ($g_{ij} + h_{ij}$, extended variant) \\
+$\mathcal{L}_{\text{cal}}$ & Scalar & Calibration regularization loss \\
+$\lambda_{\text{cal}}$ & Scalar & Regularization weight (fixed at 0.1) \\
+$p$ & Scalar $\in [0,1]$ & CSBM intra-class edge probability \\
+$q$ & Scalar $\in [0,1]$ & CSBM inter-class edge probability \\
+$\mu$ & Scalar $> 0$ & CSBM feature signal strength \\
+$w_+$ & Scalar $\geq 0$ & Expected weight on same-class edges \\
+$w_-$ & Scalar $\geq 0$ & Expected weight on different-class edges \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+
+\end{document}

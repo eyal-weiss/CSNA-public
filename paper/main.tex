@@ -40,7 +40,7 @@
 Recent work distinguishes two heterophily regimes: \emph{adversarial}, where cross-class edges dilute class signal and harm classification, and \emph{informative}, where the heterophilous structure itself carries useful signal.
 We ask: \emph{when does per-edge message routing help, and when is a uniform spectral channel sufficient?}
 To operationalize this question we introduce \emph{Cost-Sensitive Neighborhood Aggregation} (CSNA), a GNN layer that computes pairwise distance in a learned projection and uses it to soft-route each message through concordant and discordant channels with independent transformations.
-Under a contextual stochastic block model we show that cost-sensitive weighting preserves class-discriminative signal where mean aggregation provably attenuates it, provided $w_+/w_- > q/p$.
+Under a contextual stochastic block model we show that mean aggregation can reverse the label-aligned signal direction under heterophily, and that cost-sensitive weighting with $w_+/w_- > q/p$ preserves the correct sign.
 On six benchmarks with uniform tuning, CSNA is competitive with state-of-the-art methods on adversarial-heterophily datasets (Texas, Wisconsin, Cornell, Actor) but underperforms on informative-heterophily datasets (Chameleon, Squirrel)---precisely the regime where per-edge routing has no useful decomposition to exploit.
 The pattern is itself the finding: the cost function's ability to separate edge types serves as a diagnostic for the heterophily regime, revealing \emph{when} fine-grained routing adds value over uniform channels and when it does not.
 Code is available at \url{https://github.com/eyal-weiss/CSNA-public}.
@@ -68,7 +68,7 @@ This finer granularity comes at the cost of additional per-edge computation (3--
 \paragraph{Contributions.}
 (1)~We characterize when per-edge routing helps: CSNA's learned cost function achieves strong edge-type separation on adversarial-heterophily datasets but not on informative-heterophily datasets, operationalizing the regime distinction through a concrete diagnostic (\Cref{sec:experiments}).
 (2)~We introduce CSNA, a dual-channel message-passing layer with per-edge cost-based routing (\Cref{sec:method}); the default (``lite'') version uses only observed divergence $g_{ij}$ in a learned projection; an extended version adds a learned component $h_{ij}$.
-(3)~Under a contextual stochastic block model (CSBM), we prove that cost-sensitive weighting preserves class signal where mean aggregation degrades it, provided $w_+/w_- > q/p$ (\Cref{sec:theory}).
+(3)~Under a contextual stochastic block model (CSBM), we prove that mean aggregation can reverse the label-aligned signal direction under heterophily, and that cost-sensitive weighting with $w_+/w_- > q/p$ preserves the correct sign (\Cref{sec:theory}).
 
 
 %% ================================================================
@@ -223,62 +223,59 @@ Node features: $\bx_i \sim \mathcal{N}(\boldsymbol{\mu}_{y_i}, \mathbf{I}_d)$, w
 The homophily ratio is $\mathcal{H} = p/(p + q)$.
 The heterophilous regime is $q > p$, i.e., $\mathcal{H} < 1/2$.
 
-\begin{theorem}[Signal degradation under mean aggregation]\label{thm:degradation}
-Let $\G \sim \mathrm{CSBM}(n, 2, p, q, \mu)$ with $q > p$.
-After one round of mean aggregation $\mathbf{H}^{(1)} = \tilde{\mathbf{A}} \mathbf{X}$, where $\tilde{\mathbf{A}} = \mathbf{D}^{-1/2}(\mathbf{A}+\mathbf{I})\mathbf{D}^{-1/2}$ is the symmetrically normalized adjacency, the expected between-class separation satisfies:
+\begin{theorem}[Signal distortion under mean aggregation]\label{thm:degradation}
+
+\noindent Let $\G \sim \mathrm{CSBM}(n, 2, p, q, \mu)$ with constant $p, q \in (0,1)$ and equal class sizes.
+After one round of symmetrically normalized aggregation with self-loops, $\mathbf{H}^{(1)} = \tilde{\mathbf{A}} \mathbf{X}$, where $\tilde{\mathbf{A}} = \mathbf{D}^{-1/2}(\mathbf{A}+\mathbf{I})\mathbf{D}^{-1/2}$, the expected class-mean representations satisfy:
 \begin{equation}
-    \frac{\E\bigl[\|\bar{\bh}_+^{(1)} - \bar{\bh}_-^{(1)}\|^2\bigr]}{\|\boldsymbol{\mu}_+ - \boldsymbol{\mu}_-\|^2} = \left(\frac{p - q}{p + q}\right)^2 + O\!\left(\frac{1}{\sqrt{n}}\right),
+    \E[\bar{\bh}_+^{(1)} - \bar{\bh}_-^{(1)}] = \frac{p-q}{p+q}(\boldsymbol{\mu}_+ - \boldsymbol{\mu}_-) + O(1/n),
 \end{equation}
 where $\bar{\bh}_c^{(1)}$ is the mean representation of class $c$.
-When $q > p$, the leading factor is strictly less than 1; when $q \gg p$, it approaches zero.
+The scaling factor $\lambda = (p-q)/(p+q)$ is signed: when $q > p$, it is negative, reversing the label-aligned signal direction.
+The magnitude $|\lambda|$ is attenuated (strictly less than $1$) whenever $q \neq p$, and is minimized near $p = q$.
+In the extreme heterophily limit $q \gg p$, $|\lambda|$ approaches $1$---strong heterophily distorts but does not collapse the signal.
 \end{theorem}
 
 \begin{proof}
-For a node $i \in V_+$, same-class neighbors number $n_s(i) \sim \mathrm{Bin}(n/2 - 1, p)$ and different-class neighbors $n_d(i) \sim \mathrm{Bin}(n/2, q)$.
-Under mean aggregation:
+Under the dense CSBM, $d_i = \Theta(n)$, so the self-loop in $\mathbf{A}+\mathbf{I}$ contributes $O(1/n)$ per node and does not affect the leading coefficient.
+For a node $i \in V_+$, same-class neighbors number $n_s(i) \sim \mathrm{Bin}(n/2-1, p)$ and different-class neighbors $n_d(i) \sim \mathrm{Bin}(n/2, q)$.
+At leading order:
 \begin{align}
-    \E[\bh_i^{(1)} | y_i = +1] &= \frac{p}{p+q}\boldsymbol{\mu}_+ + \frac{q}{p+q}\boldsymbol{\mu}_- + O(1/\sqrt{n}) = \frac{p - q}{p + q}\boldsymbol{\mu}_+ + O(1/\sqrt{n}),
+    \E[\bh_i^{(1)} | y_i = +1] &= \frac{p}{p+q}\boldsymbol{\mu}_+ + \frac{q}{p+q}\boldsymbol{\mu}_- + O(1/n) = \frac{p-q}{p+q} \cdot \frac{\mu}{2}\mathbf{e}_1 + O(1/n),
 \end{align}
-where the $O(1/\sqrt{n})$ term follows from concentration of $n_s(i)/d_i$ around $p/(p+q)$ (Hoeffding's inequality, $d_i = \Theta(n)$).
-By symmetry, $\E[\bh_i^{(1)} | y_i = -1] = \frac{p-q}{p+q}\boldsymbol{\mu}_- + O(1/\sqrt{n})$.
-Averaging over $n/2$ nodes per class and applying the law of large numbers:
-\begin{equation}
-    \E\bigl[\|\bar{\bh}_+^{(1)} - \bar{\bh}_-^{(1)}\|^2\bigr] = \left(\frac{p-q}{p+q}\right)^2 \|\boldsymbol{\mu}_+ - \boldsymbol{\mu}_-\|^2 + O(1/\sqrt{n}). \qed
-\end{equation}
+where the $O(1/n)$ term absorbs both the self-loop contribution and the concentration error (by Hoeffding's inequality, $n_s(i)/d_i$ concentrates around $p/(p+q)$ at rate $O(1/\sqrt{n})$, giving $O(1/n)$ after averaging over $n/2$ nodes per class).
+By symmetry and averaging: $\E[\bar{\bh}_+^{(1)} - \bar{\bh}_-^{(1)}] = \frac{p-q}{p+q}(\boldsymbol{\mu}_+ - \boldsymbol{\mu}_-) + O(1/n)$. \qed
 \end{proof}
 
-\begin{theorem}[Signal preservation under cost-sensitive aggregation]\label{thm:preservation}
-Under the same CSBM, suppose an aggregation scheme weights edge $(i,j)$ by $w_{ij}$, with $\E[w_{ij} | y_i = y_j] = w_+$ and $\E[w_{ij} | y_i \neq y_j] = w_-$, where $w_+ > w_- \geq 0$.
+\begin{theorem}[Cost-sensitive aggregation preserves signal direction]\label{thm:preservation}
+Under the same CSBM, suppose an aggregation scheme weights each edge $(i,j)$ by $w_{ij}$, with $\E[w_{ij} | y_i = y_j] = w_+$ and $\E[w_{ij} | y_i \neq y_j] = w_-$, where $w_+ > w_- \geq 0$.
 Then:
 \begin{equation}
-    \frac{\E\bigl[\|\bar{\bh}_+^{(1)} - \bar{\bh}_-^{(1)}\|^2\bigr]}{\|\boldsymbol{\mu}_+ - \boldsymbol{\mu}_-\|^2} = \left(\frac{p\, w_+ - q\, w_-}{p\, w_+ + q\, w_-}\right)^2 + O(1/\sqrt{n}).
+    \E[\bar{\bh}_+^{(1)} - \bar{\bh}_-^{(1)}] = \frac{p\,w_+ - q\,w_-}{p\,w_+ + q\,w_-}(\boldsymbol{\mu}_+ - \boldsymbol{\mu}_-) + O(1/n).
 \end{equation}
-This exceeds the mean-aggregation factor $\left(\frac{p-q}{p+q}\right)^2$ if and only if $w_+/w_- > q/p$.
+The scaling factor is positive---preserving the original class direction---if and only if $w_+/w_- > q/p$.
 \end{theorem}
 
 \begin{proof}
-Replacing uniform weights with $w_+$ (same-class) and $w_-$ (different-class) in the proof of \Cref{thm:degradation}:
+Replacing uniform weights with $w_+$ and $w_-$ in the proof of \Cref{thm:degradation}:
 \begin{align}
-    \E[\bh_i^{(1)} | y_i = +1] &\propto p\, w_+ \boldsymbol{\mu}_+ + q\, w_- \boldsymbol{\mu}_- + O(1/\sqrt{n}).
+    \E[\bh_i^{(1)} | y_i = +1] &= \frac{p\, w_+}{p\, w_+ + q\, w_-}\boldsymbol{\mu}_+ + \frac{q\, w_-}{p\, w_+ + q\, w_-}\boldsymbol{\mu}_- + O(1/n).
 \end{align}
-The between-class scatter follows by substituting $p \to p\, w_+$ and $q \to q\, w_-$:
-\begin{equation}
-    \E\bigl[\|\bar{\bh}_+^{(1)} - \bar{\bh}_-^{(1)}\|^2\bigr] = \left(\frac{p\, w_+ - q\, w_-}{p\, w_+ + q\, w_-}\right)^2 \|\boldsymbol{\mu}_+ - \boldsymbol{\mu}_-\|^2 + O(1/\sqrt{n}).
-\end{equation}
-The condition $w_+/w_- > q/p$ is equivalent to $p\, w_+ > q\, w_-$, ensuring the same-class contribution dominates. \qed
+Setting $w_+=w_-=1$ recovers \Cref{thm:degradation}.
+The numerator $p\,w_+ - q\,w_- > 0$ iff $w_+/w_- > q/p$. \qed
 \end{proof}
 
 \begin{remark}[Applicability to CSNA]
 \Cref{thm:preservation} applies to CSNA's concordant channel with $w_{ij} = s_{ij}$.
-The condition $s_+/s_- > q/p$ requires the cost function to assign sufficiently higher concordance to same-class edges.
-The calibration regularizer (\Cref{eq:cal}) encourages this.
-However, \Cref{thm:preservation} is \emph{conditional}: it shows what happens \emph{if} the cost function achieves good separation, not that CSNA \emph{will} learn such separation.
+The condition $s_+/s_- > q/p$ requires the cost function to assign sufficiently higher concordance to same-class edges; the calibration regularizer (\Cref{eq:cal}) encourages this.
+\Cref{thm:preservation} is \emph{conditional}: it shows what happens \emph{if} the cost function achieves the separation, not that CSNA \emph{will} learn it.
 \end{remark}
 
 \begin{remark}[Scope and limitations]\label{rem:scope}
 (i)~The CSBM analysis is for $C=2$; experiments have $C=5$.
 The qualitative conclusion carries over (\Cref{app:multiclass}), but the quantitative bound changes.
-(ii)~\Cref{thm:preservation} bounds between-class scatter only, not within-class scatter (\Cref{app:within_class}).
+(ii)~\Cref{thm:preservation} bounds the class-mean difference, not classification accuracy: a sign-reversed but well-separated representation can be corrected by a downstream linear classifier.
+The theorems show that cost-sensitive weighting \emph{preserves the label-aligned signal direction} where mean aggregation may reverse it; they do not prove improved classification in isolation.
 (iii)~The analysis covers a single layer; multi-layer interactions between evolving representations and the cost function are not analyzed.
 \end{remark}
 
@@ -319,12 +316,12 @@ We compare against: (1)~\textbf{MLP} (no graph structure), (2)~\textbf{GCN}~\cit
 
 \paragraph{Protocol.}
 We use 10 random 60\%/20\%/20\% splits (seed 42).
-\emph{All methods} are tuned over the same hyperparameter grid: learning rate $\in \{0.01, 0.005\}$, hidden dimension $\in \{64, 128\}$.
+\emph{All methods} are tuned over the same hyperparameter grid: learning rate $\in \{0.01, 0.005\}$, hidden dimension $\in \{64, 128\}$ on small datasets (Texas, Wisconsin, Cornell) and $\{64\}$ on large datasets (Actor, Chameleon, Squirrel) for computational efficiency.
 CSNA additionally tunes temperature $\tau \in \{0.1, 0.5, 1.0, 2.0\}$.
+Tuning uses 3 validation splits on small datasets and 2 on large datasets.
 All models use 2 layers, dropout 0.5, Adam with weight decay $5 \times 10^{-4}$, and early stopping (patience 50, max 300 epochs).
 We save the checkpoint with best validation accuracy and evaluate it \emph{once} on test.
-We report mean accuracy over 10 splits.
-We report classification accuracy (fraction of correctly labeled test nodes), averaged over the 10 splits, with standard deviation reflecting split-to-split variability.
+We report classification accuracy (fraction of correctly labeled test nodes), averaged over 10 splits, with standard deviation reflecting split-to-split variability.
 CSNA here is the lite version ($g_{ij}$ only, no sampling).
 Complete details in \Cref{app:repro}.
 
@@ -342,32 +339,33 @@ Results are in Table~\ref{tab:results}.
 Method & Texas & Wisconsin & Cornell & Actor & Chameleon & Squirrel \\
  & $\mathcal{H}$=0.09 & $\mathcal{H}$=0.19 & $\mathcal{H}$=0.13 & $\mathcal{H}$=0.22 & $\mathcal{H}$=0.23 & $\mathcal{H}$=0.22 \\
 \midrule
-MLP & \underline{77.3{\tiny$\pm$4.6}} & \underline{83.7{\tiny$\pm$4.8}} & 72.2{\tiny$\pm$3.6} & \underline{35.0{\tiny$\pm$1.4}} & 51.9{\tiny$\pm$1.8} & 34.8{\tiny$\pm$1.4} \\
+MLP & 77.3{\tiny$\pm$4.6} & \textbf{83.7{\tiny$\pm$4.8}} & \underline{72.2{\tiny$\pm$3.6}} & 35.0{\tiny$\pm$1.4} & 51.9{\tiny$\pm$1.8} & 34.8{\tiny$\pm$1.4} \\
 GCN & 55.7{\tiny$\pm$9.9} & 50.6{\tiny$\pm$8.5} & 47.0{\tiny$\pm$8.7} & 27.3{\tiny$\pm$1.4} & \textbf{67.3{\tiny$\pm$1.7}} & \textbf{53.4{\tiny$\pm$0.8}} \\
-GAT & 50.8{\tiny$\pm$9.8} & 51.4{\tiny$\pm$7.8} & 47.3{\tiny$\pm$5.8} & 28.0{\tiny$\pm$1.4} & \underline{65.7{\tiny$\pm$2.2}} & \underline{50.4{\tiny$\pm$1.4}} \\
+GAT & 50.8{\tiny$\pm$9.8} & 51.4{\tiny$\pm$7.8} & 47.3{\tiny$\pm$5.8} & 28.0{\tiny$\pm$1.4} & 65.7{\tiny$\pm$2.2} & 50.4{\tiny$\pm$1.4} \\
 GraphSAGE & 76.5{\tiny$\pm$6.8} & 75.9{\tiny$\pm$5.8} & 66.2{\tiny$\pm$7.7} & 34.1{\tiny$\pm$0.6} & 63.9{\tiny$\pm$2.1} & 45.8{\tiny$\pm$1.4} \\
-H2GCN & 75.9{\tiny$\pm$5.0} & 76.1{\tiny$\pm$6.1} & 67.8{\tiny$\pm$7.7} & 31.3{\tiny$\pm$1.7} & 51.5{\tiny$\pm$2.8} & 37.3{\tiny$\pm$2.8} \\
-GPRGNN & \textbf{78.1{\tiny$\pm$8.0}} & 78.6{\tiny$\pm$5.1} & 70.0{\tiny$\pm$6.7} & 34.2{\tiny$\pm$0.7} & 58.5{\tiny$\pm$2.8} & 38.4{\tiny$\pm$2.3} \\
-ACM-GNN & 75.9{\tiny$\pm$6.3} & 80.0{\tiny$\pm$6.1} & 69.5{\tiny$\pm$5.1} & 33.5{\tiny$\pm$1.6} & 59.3{\tiny$\pm$2.0} & 41.6{\tiny$\pm$1.3} \\
+H2GCN & \textbf{81.9{\tiny$\pm$4.2}} & \underline{82.4{\tiny$\pm$5.8}} & \underline{72.2{\tiny$\pm$4.2}} & 35.6{\tiny$\pm$0.9} & 56.8{\tiny$\pm$2.7} & 35.0{\tiny$\pm$1.3} \\
+GPRGNN & \underline{77.8{\tiny$\pm$6.9}} & 75.7{\tiny$\pm$7.7} & 58.6{\tiny$\pm$9.9} & \textbf{36.0{\tiny$\pm$0.8}} & 65.0{\tiny$\pm$2.1} & 43.6{\tiny$\pm$1.8} \\
+ACM-GNN & 77.3{\tiny$\pm$8.2} & 78.0{\tiny$\pm$4.4} & 68.6{\tiny$\pm$7.2} & 35.3{\tiny$\pm$1.2} & \underline{65.9{\tiny$\pm$2.9}} & \underline{51.0{\tiny$\pm$1.8}} \\
 \midrule
-CSNA (ours) & 77.0{\tiny$\pm$8.3} & 79.6{\tiny$\pm$6.2} & \textbf{72.7{\tiny$\pm$4.3}} & \textbf{35.7{\tiny$\pm$1.2}} & 54.6{\tiny$\pm$2.7} & 37.8{\tiny$\pm$1.9} \\
+CSNA (ours) & 77.0{\tiny$\pm$8.3} & 79.6{\tiny$\pm$6.2} & \textbf{72.7{\tiny$\pm$4.3}} & \underline{35.7{\tiny$\pm$1.2}} & 54.6{\tiny$\pm$2.7} & 37.8{\tiny$\pm$1.9} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The results reveal a clear split between two types of heterophily benchmarks:
+The results reveal a clear split between two types of heterophily benchmarks.
+Note that many differences across methods are within one standard deviation; we focus on patterns rather than strict mean rankings.
 
 \textbf{Adversarial heterophily (Texas, Wisconsin, Cornell, Actor).}
 On these datasets, cross-class edges are adversarial: aggregating neighbor features degrades classification.
 MLP is a strong baseline, and standard GNNs (GCN, GAT) perform poorly.
-CSNA is competitive with the best methods: it achieves the highest mean accuracy on Cornell and Actor (though the margins over MLP are within one standard deviation), and is within 1--4 points of the best on Texas and Wisconsin.
-GPRGNN and ACM-GNN are also strong on these datasets.
+H2GCN is the strongest method on Texas (81.9) and Wisconsin (82.4), where its ego-separated multi-hop design is effective.
+CSNA is competitive: it is statistically tied for first on Cornell (72.7 vs.\ H2GCN 72.2 and MLP 72.2, all within $\sim$0.5pp) and on Actor (35.7 vs.\ GPRGNN 36.0 and H2GCN 35.6, all within $\sim$0.4pp---well within one standard deviation).
+On Texas and Wisconsin, CSNA trails H2GCN but remains within one standard deviation of the other heterophily-aware methods.
 
 \textbf{Informative heterophily (Chameleon, Squirrel).}
 On these datasets, heterophilous structure itself carries useful signal.
-GCN and GAT substantially outperform all heterophily-specific methods (CSNA, H2GCN, GPRGNN, ACM-GNN).
-This is consistent with prior observations~\cite{platonov2023critical,luan2022revisiting}: methods that downweight cross-class edges lose the informative signal.
-CSNA's cost-based routing cannot distinguish ``harmful'' from ``useful'' heterophilous edges.
+GCN remains the top performer (67.3 on Chameleon, 53.4 on Squirrel), but ACM-GNN is close on both datasets (65.9 and 51.0, within 1--2pp of GCN), while CSNA (54.6 and 37.8) and H2GCN (56.8 and 35.0) trail substantially.
+CSNA's cost-based routing cannot distinguish ``harmful'' from ``useful'' heterophilous edges---methods that apply uniform spectral filters (ACM-GNN, GPRGNN) or standard aggregation (GCN) handle this regime better.
 This distinction---between adversarial and informative heterophily---is increasingly recognized~\cite{luan2022revisiting,platonov2023critical} and suggests that no single approach dominates all heterophily regimes.
 CSNA's cost semantics make the distinction explicit: on adversarial datasets, learned costs successfully separate edge types (Fig.~\ref{fig:cost_dist}); on informative datasets, they cannot.
 
@@ -379,10 +377,10 @@ CSNA's cost semantics make the distinction explicit: on adversarial datasets, le
 \end{figure}
 
 \paragraph{Comparison with ACM-GNN.}
-ACM-GNN and CSNA show a similar overall pattern.
-CSNA slightly outperforms ACM-GNN on Cornell (+3.2pp) and Actor (+2.2pp), while ACM-GNN is ahead on Chameleon (+4.7pp) and Squirrel (+3.8pp).
-The accuracy differences between CSNA and ACM-GNN are generally within one standard deviation, suggesting that the per-edge granularity does not consistently translate to measurable accuracy gains over uniform spectral channels.
-The methods differ mainly in mechanism, not in overall performance level.
+ACM-GNN and CSNA share the dual-channel-plus-gating architecture but differ in routing granularity.
+On adversarial-heterophily datasets, their accuracy is comparable: CSNA leads on Cornell (+4.1pp) and Actor (+0.4pp), while ACM-GNN edges ahead on Wisconsin.
+The clearest separation appears on informative-heterophily datasets, where ACM-GNN's uniform spectral channels are substantially more effective: ACM-GNN outperforms CSNA by 11.3pp on Chameleon and 13.2pp on Squirrel.
+This suggests that when heterophilous edges carry uniformly useful signal, fixed spectral filters preserve it better than per-edge routing, which may over-differentiate edges that are equally informative.
 \paragraph{Routing quality as a diagnostic.}
 To quantify the cost function's ability to discriminate edge types, we compute the AUC of the concordance score $s_{ij}$ as a binary classifier for same-class vs.\ different-class edges.
 On the adversarial-heterophily datasets, AUC ranges from 0.48 (Texas) to 0.83 (Wisconsin), while on informative-heterophily datasets it is 0.55--0.57 (Chameleon, Squirrel).
@@ -404,9 +402,9 @@ These results motivate presenting the lite version without sampling as the defau
 \paragraph{Limitations---and what they reveal.}
 \begin{itemize}
     \item \textbf{Homophilous graphs.} CSNA underperforms GCN by 4--11pp on Cora, CiteSeer, and PubMed (\Cref{app:homophily}). The per-edge routing is not justified when standard aggregation suffices; this is expected, since the cost function has little to separate when most edges are already same-class.
-    \item \textbf{Informative heterophily.} CSNA underperforms GCN on Chameleon (by 12.7pp) and Squirrel (by 15.6pp). Rather than a mere negative result, this failure is diagnostic: it identifies datasets where heterophilous edges are uniformly informative and no per-edge decomposition can improve on uniform aggregation. The pattern---success on adversarial heterophily, failure on informative heterophily---is itself a contribution, as it operationalizes the regime distinction through CSNA's cost semantics.
+    \item \textbf{Informative heterophily.} CSNA underperforms GCN on Chameleon (by 12.7pp) and Squirrel (by 15.6pp), and trails ACM-GNN by 11--13pp on both. Rather than a mere negative result, this failure is diagnostic: it identifies datasets where heterophilous edges are uniformly informative and per-edge routing over-differentiates edges that carry equally useful signal. Fixed spectral filters (ACM-GNN) and standard aggregation (GCN) better preserve this signal.
     \item \textbf{Computational cost.} CSNA is 3--10$\times$ slower than GCN (\Cref{app:runtime}), though it uses fewer parameters.
-    \item \textbf{Similarity to ACM-GNN.} CSNA shares the dual-channel-plus-gating design with ACM-GNN~\cite{luan2022revisiting}. The per-edge routing is a meaningful architectural difference, but accuracy gains over ACM-GNN are not consistently significant.
+    \item \textbf{Comparison with ACM-GNN.} CSNA shares the dual-channel-plus-gating design with ACM-GNN~\cite{luan2022revisiting}. On adversarial-heterophily datasets the methods achieve comparable accuracy; on informative-heterophily datasets ACM-GNN is clearly superior. The per-edge routing is a meaningful architectural difference whose value is regime-dependent.
 \end{itemize}
 
 
@@ -415,9 +413,10 @@ These results motivate presenting the lite version without sampling as the defau
 %% ================================================================
 
 We presented CSNA, a GNN layer that computes pairwise distance in a learned projection and uses it to soft-route messages through concordant and discordant channels, with per-node gating.
-The key architectural difference from the closely related ACM-GNN is per-edge routing rather than uniform spectral channels---a finer-grained mechanism that, in our experiments, yields comparable accuracy at higher computational cost.
-Our theoretical analysis provides a clean condition ($w_+/w_- > q/p$) under which cost-sensitive weighting improves over mean aggregation.
-The clearest open question is whether per-edge routing can be adapted to the informative-heterophily regime---where CSNA currently fails---possibly by learning to leverage rather than suppress cross-class signal.
+The key architectural difference from the closely related ACM-GNN is per-edge routing rather than uniform spectral channels---a finer-grained mechanism that is competitive on adversarial-heterophily datasets but underperforms on informative-heterophily datasets where uniform filters are more effective.
+Our theoretical analysis provides a clean condition ($w_+/w_- > q/p$) under which cost-sensitive weighting preserves the label-aligned signal direction that mean aggregation may reverse.
+The results operationalize the adversarial/informative heterophily distinction: CSNA's cost function achieves meaningful edge-type separation only in the adversarial regime, serving as a diagnostic for the nature of heterophily in a given graph.
+The clearest open question is whether per-edge routing can be adapted to the informative-heterophily regime---possibly by learning to leverage rather than suppress cross-class signal.
 
 
 %% ================================================================
@@ -545,62 +544,40 @@ For scaling to larger graphs, edge sampling~\cite{rong2020dropedge} is a natural
 
 \subsection{Detailed Proof of Theorem~\ref{thm:degradation}}
 
-We provide the complete derivation with explicit concentration bounds.
-Consider the binary CSBM with $n$ nodes, two equal-sized classes, intra-class edge probability $p$, and inter-class edge probability $q > p$.
-
+Consider the binary CSBM with $n$ nodes, two equal-sized classes, constant edge probabilities $p, q \in (0,1)$ with $q > p$.
 Let $V_+ = \{i : y_i = +1\}$ and $V_- = \{i : y_i = -1\}$, each of size $n/2$.
 Features: $\bx_i \sim \mathcal{N}(\boldsymbol{\mu}_{y_i}, \mathbf{I}_d)$, with $\boldsymbol{\mu}_+ = +\frac{\mu}{2}\mathbf{e}_1$ and $\boldsymbol{\mu}_- = -\frac{\mu}{2}\mathbf{e}_1$.
 
-For a node $i \in V_+$: $n_s(i) \sim \mathrm{Bin}(n/2 - 1, p)$ and $n_d(i) \sim \mathrm{Bin}(n/2, q)$, so $d_i = n_s(i) + n_d(i)$.
+For a node $i \in V_+$: $n_s(i) \sim \mathrm{Bin}(n/2 - 1, p)$ and $n_d(i) \sim \mathrm{Bin}(n/2, q)$, with $d_i = 1 + n_s(i) + n_d(i)$ (including the self-loop).
+Since $\E[d_i] = \Theta(n)$, the self-loop contributes $O(1/n)$ per node and vanishes at leading order.
 
-By Hoeffding's inequality:
-\begin{equation}
-    \Pr\!\left[\left|\frac{n_s(i)}{d_i} - \frac{p}{p+q}\right| > \epsilon\right] \leq 2\exp\!\left(-2\epsilon^2 d_i\right),
-\end{equation}
-and since $\E[d_i] = (n/2-1)p + (n/2)q = \Theta(n)$, we have $n_s(i)/d_i = p/(p+q) + O_p(1/\sqrt{n})$.
-
-Under mean aggregation:
+By Hoeffding's inequality, $n_s(i)/d_i$ concentrates around $p/(p+q)$ at rate $O(1/\sqrt{n})$.
+At leading order:
 \begin{align}
-    \bh_i^{(1)} &= \frac{1}{d_i}\sum_{j \in \N(i)} \bx_j = \frac{n_s(i)}{d_i}\bar{\bx}_+(i) + \frac{n_d(i)}{d_i}\bar{\bx}_-(i).
+    \E[\bh_i^{(1)} | y_i = +1] &= \frac{p}{p+q}\boldsymbol{\mu}_+ + \frac{q}{p+q}\boldsymbol{\mu}_- + O(1/n) = \frac{p-q}{p+q} \cdot \frac{\mu}{2}\mathbf{e}_1 + O(1/n).
 \end{align}
-Taking expectations:
-\begin{align}
-    \E[\bh_i^{(1)} | y_i = +1] &= \frac{p}{p+q} \boldsymbol{\mu}_+ + \frac{q}{p+q} \boldsymbol{\mu}_- + O(1/\sqrt{n}) \\
-    &= \frac{p-q}{p+q} \cdot \frac{\mu}{2}\mathbf{e}_1 + O(1/\sqrt{n}).
-\end{align}
-
-By symmetry, $\E[\bh_i^{(1)} | y_i = -1] = \frac{p-q}{p+q} \cdot (-\frac{\mu}{2}\mathbf{e}_1) + O(1/\sqrt{n})$.
-
-The class means $\bar{\bh}_c^{(1)}$ concentrate at rate $O(1/\sqrt{n})$:
+By symmetry, $\E[\bh_i^{(1)} | y_i = -1] = \frac{p-q}{p+q} \cdot (-\frac{\mu}{2}\mathbf{e}_1) + O(1/n)$.
+Averaging over $n/2$ nodes per class (the $O(1/\sqrt{n})$ per-node errors average to $O(1/n)$):
 \begin{equation}
-    \E\!\left[\|\bar{\bh}_+^{(1)} - \bar{\bh}_-^{(1)}\|^2\right] = \left(\frac{p-q}{p+q}\right)^2 \mu^2 + O(1/\sqrt{n}).
+    \E[\bar{\bh}_+^{(1)} - \bar{\bh}_-^{(1)}] = \frac{p-q}{p+q}(\boldsymbol{\mu}_+ - \boldsymbol{\mu}_-) + O(1/n). \qed
 \end{equation}
-
-Since $\|\boldsymbol{\mu}_+ - \boldsymbol{\mu}_-\|^2 = \mu^2$, the multiplicative attenuation is $\left(\frac{p-q}{p+q}\right)^2$. $\qed$
 
 \subsection{Detailed Proof of Theorem~\ref{thm:preservation}}
 
-The weighted aggregation assigns weight $w_{ij}$ to each edge.
-For $i \in V_+$:
-\begin{equation}
-    \bh_i^{(1)} \propto \sum_{j \in \N(i)} w_{ij}\, \bx_j.
-\end{equation}
-Taking expectations:
+The weighted aggregation assigns expected weight $w_+$ to same-class edges and $w_-$ to different-class edges.
+The self-loop contributes $O(1/n)$ as in Theorem~\ref{thm:degradation} and does not affect the leading coefficient.
+At leading order:
 \begin{align}
-    \E[\bh_i^{(1)} | y_i = +1] &\propto \E[n_s(i)] \cdot w_+ \cdot \boldsymbol{\mu}_+ + \E[n_d(i)] \cdot w_- \cdot \boldsymbol{\mu}_- + O(1/\sqrt{n}) \\
-    &\propto p\, w_+ \boldsymbol{\mu}_+ + q\, w_- \boldsymbol{\mu}_- + O(1/\sqrt{n}) \\
-    &= \frac{p\, w_+ - q\, w_-}{2}\, \mu\, \mathbf{e}_1 + O(1/\sqrt{n}).
+    \E[\bh_i^{(1)} | y_i = +1] &= \frac{p\, w_+}{p\, w_+ + q\, w_-}\boldsymbol{\mu}_+ + \frac{q\, w_-}{p\, w_+ + q\, w_-}\boldsymbol{\mu}_- + O(1/n).
 \end{align}
-By the same concentration argument:
+Averaging over classes:
 \begin{equation}
-    \E\!\left[\|\bar{\bh}_+^{(1)} - \bar{\bh}_-^{(1)}\|^2\right] = \left(\frac{p\, w_+ - q\, w_-}{p\, w_+ + q\, w_-}\right)^2 \mu^2 + O(1/\sqrt{n}).
+    \E[\bar{\bh}_+^{(1)} - \bar{\bh}_-^{(1)}] = \frac{p\,w_+ - q\,w_-}{p\,w_+ + q\,w_-}\,(\boldsymbol{\mu}_+ - \boldsymbol{\mu}_-) + O(1/n).
 \end{equation}
 
-Comparing with mean aggregation: cost-sensitive weighting improves when
-\begin{equation}
-    \left|\frac{p\, w_+ - q\, w_-}{p\, w_+ + q\, w_-}\right| > \left|\frac{p - q}{p + q}\right|,
-\end{equation}
-which holds iff $w_+/w_- > q/p$ (when $q > p$). $\qed$
+Setting $w_+=w_-=1$ recovers Theorem~\ref{thm:degradation}.
+
+\emph{Sign preservation:} The scaling factor is positive iff $p\,w_+ > q\,w_-$, i.e., $w_+/w_- > q/p$. $\qed$
 
 
 \section{Multi-Class Extension}\label{app:multiclass}
@@ -610,15 +587,15 @@ In a $C$-class CSBM with intra-class probability $p$ and uniform inter-class pro
 \begin{itemize}
     \item The expected fraction of same-class neighbors is $p/(p + (C-1)q) = \mathcal{H}$.
     \item The between-class scatter matrix $\mathbf{S}_B$ has rank $C-1$.
-    \item Under mean aggregation, each pairwise class-mean difference is attenuated by $\left(\frac{p - q}{p + (C-1)q}\right)^2$.
-    \item Under cost-sensitive aggregation with $w_+/w_- > q/p$, the same improvement applies to each pairwise difference.
+    \item Under mean aggregation, each pairwise class-mean difference is scaled by the signed factor $(p - q)/(p + (C-1)q)$, which is negative when $q > p$ (signal direction reversal).
+    \item Under cost-sensitive aggregation, the factor becomes $(p\,w_+ - q\,w_-)/(p\,w_+ + (C-1)q\,w_-)$. Sign preservation (positive factor) requires $w_+/w_- > q/p$.
 \end{itemize}
-The qualitative conclusion is unchanged: cost-sensitive weighting preserves between-class scatter better than uniform weighting when $w_+/w_- > q/p$.
+The qualitative conclusion is unchanged: cost-sensitive weighting preserves the label-aligned signal direction where mean aggregation may reverse it.
 
 
 \section{Within-Class Scatter}\label{app:within_class}
 
-\Cref{thm:preservation} bounds between-class scatter but not within-class scatter $\mathrm{tr}(\mathbf{S}_W)$.
+\Cref{thm:preservation} bounds the class-mean difference but not within-class scatter $\mathrm{tr}(\mathbf{S}_W)$.
 For a node $i \in V_+$:
 \begin{equation}
     \bh_i^{(1)} - \bar{\bh}_+^{(1)} = \sum_{j \in \N(i)} w_{ij}(\bx_j - \E[\bx_j | y_j]) + \text{(edge-composition terms)}.
@@ -645,10 +622,10 @@ Test evaluation: once, using saved checkpoint.
 \paragraph{Tuning protocol.} All methods tuned over the same grid:
 \begin{itemize}
     \item Learning rate: $\{0.01, 0.005\}$
-    \item Hidden dimension: $\{64, 128\}$
+    \item Hidden dimension: $\{64, 128\}$ on small datasets (Texas, Wisconsin, Cornell); $\{64\}$ on large datasets (Actor, Chameleon, Squirrel)
     \item CSNA additionally: $\tau \in \{0.1, 0.5, 1.0, 2.0\}$
 \end{itemize}
-Best configuration selected by mean validation accuracy over 3 tuning splits.
-Final results reported on all 10 splits.
+Best configuration selected by mean validation accuracy over 3 tuning splits (small datasets) or 2 tuning splits (large datasets), with tuning epochs capped at 200 (small) or 150 (large).
+Final results reported on all 10 splits with full 300-epoch training.
 
 \end{document}
