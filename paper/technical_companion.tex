@@ -11,6 +11,8 @@
 \usepackage{xcolor}
 \usepackage{tcolorbox}
 \usepackage{parskip}
+\usepackage{algorithm}
+\usepackage{algorithmic}
 
 % tcolorbox for examples
 \tcbuselibrary{breakable}
@@ -338,12 +340,12 @@ backpropagation---the neural network discovers which projection makes same-class
 nodes look similar and different-class nodes look different.
 
 
-\subsection{Step 2: Edge Cost --- Observed Divergence $g_{ij}$ (Equation 3)}
+\subsection{Step 2: Edge Cost --- Observed Divergence $g_{ij}$ (Equation 2)}
 \label{sec:gij}
 
 \begin{equation}
   g_{ij}^{(\ell)} = \|\bW_g\, \bh_i^{(\ell)} - \bW_g\, \bh_j^{(\ell)}\|_2
-  \tag{Eq.~3}
+  \tag{Eq.~2}
 \end{equation}
 
 \textbf{What it computes:}
@@ -387,23 +389,28 @@ has successfully made same-class nodes close and different-class nodes far apart
 \end{example}
 
 
-\subsection{Step 3: The Sigmoid Concordance Score $s_{ij}$ (Equation 4)}
+\subsection{Step 3: The Sigmoid Concordance Score $s_{ij}$ (Equation 3)}
 \label{sec:concordance}
 
 \begin{equation}
-  s_{ij}^{(\ell)} = \sigma\!\left(\frac{-g_{ij}^{(\ell)}}{\tau}\right) \in (0, 1)
-  \tag{Eq.~4}
+  s_{ij}^{(\ell)} = \sigma\!\left(\frac{-g_{ij}^{(\ell)}}{\tau}\right) \in (0,\; 0.5]
+  \tag{Eq.~3}
 \end{equation}
 
 \textbf{What it computes:}
-Converts the distance $g_{ij}$ into a ``concordance score'' between 0 and 1.
-High score ($s_{ij} \approx 1$) means the edge is likely \textbf{concordant}
-(same class); low score ($s_{ij} \approx 0$) means it is likely \textbf{discordant}
-(different class).
+Converts the distance $g_{ij}$ into a ``concordance score.''
+Because $g_{ij} \geq 0$, the input to the sigmoid is always $-g_{ij}/\tau \leq 0$,
+so $s_{ij} \leq \sigma(0) = 0.5$.
+The maximum $s_{ij} = 0.5$ is attained only for self-loops ($g_{ii} = 0$);
+for any edge connecting two distinct nodes with $g_{ij} > 0$, the score is strictly
+less than $0.5$.
+Higher scores (closer to $0.5$) indicate the edge is likely \textbf{concordant}
+(same class); lower scores (closer to $0$) indicate the edge is likely
+\textbf{discordant} (different class).
 
 \textbf{Symbol breakdown:}
 \begin{itemize}
-  \item $g_{ij}^{(\ell)} \geq 0$: the distance from Eq.~3.
+  \item $g_{ij}^{(\ell)} \geq 0$: the distance from Eq.~2.
   \item $\tau > 0$: a \textbf{temperature} hyperparameter that controls the
     sharpness of the sigmoid.
     Tuned from $\{0.1, 0.5, 1.0, 2.0\}$ in experiments.
@@ -414,11 +421,13 @@ High score ($s_{ij} \approx 1$) means the edge is likely \textbf{concordant}
 \end{itemize}
 
 \textbf{Why the sigmoid?}
-The sigmoid provides a smooth, differentiable mapping from distance to a score
-in $(0, 1)$, which is needed for two reasons:
+The sigmoid provides a smooth, differentiable mapping from distance to a score,
+which is needed for two reasons:
 (1) we need a probabilistic-style weight to split messages between two channels,
 and (2) the function must be differentiable so gradients can flow back to $\bW_g$
 during training.
+Note that because the sigmoid input $-g_{ij}/\tau$ is always non-positive,
+the output is restricted to $(0, 0.5]$---not the full $(0,1)$ range of the sigmoid.
 
 \textbf{What does temperature $\tau$ control?}
 \begin{itemize}[nosep]
@@ -515,14 +524,14 @@ The channels emphasize different parts of the neighborhood.
 \end{example}
 
 
-\subsection{Step 4: Dual-Channel Aggregation (Equations 5--6)}
+\subsection{Step 4: Dual-Channel Aggregation (Equations 4--5)}
 \label{sec:dual_channel}
 
 \begin{align}
   \bh_i^{\text{con}} &= \sum_{j \in \N(i)} \tilde{s}_{ij}\, \bW_{\text{con}}\, \bh_j^{(\ell)}
-  \tag{Eq.~5} \\[6pt]
+  \tag{Eq.~4} \\[6pt]
   \bh_i^{\text{dis}} &= \sum_{j \in \N(i)} \tilde{d}_{ij}\, \bW_{\text{dis}}\, \bh_j^{(\ell)}
-  \tag{Eq.~6}
+  \tag{Eq.~5}
 \end{align}
 
 \textbf{What they compute:}
@@ -577,13 +586,13 @@ weighted aggregation.
 \end{keyidea}
 
 
-\subsection{Step 5: The Gating Mechanism (Equation 7)}
+\subsection{Step 5: The Gating Mechanism (Equation 6)}
 \label{sec:gating}
 
 \begin{equation}
   \bh_i^{(\ell+1)} = \sum_{k \in \{\text{con}, \text{dis}, \text{self}\}}
   \gamma_k(\bh_i) \cdot \bh_i^{k}
-  \tag{Eq.~7}
+  \tag{Eq.~6}
 \end{equation}
 where:
 \[
@@ -652,19 +661,24 @@ This node relies 69\% on its own features, 25\% on the concordant channel,
 and only 6\% on the discordant channel---similar to an MLP with a small
 graph-based correction.
 
-On the Wisconsin and Actor datasets, the paper reports that CSNA learns
-$\gamma_{\text{self}} = 1.0$ for all nodes, effectively ignoring the graph
-entirely and reducing to an MLP.
+On the Wisconsin and Actor datasets, the paper reports that the
+\emph{average} gate weights across nodes are
+$\gamma_{\text{self}} \approx 1.0$ (with $\gamma_{\text{con}} \approx 0$
+and $\gamma_{\text{dis}} \approx 0$), indicating that the model
+on average relies almost entirely on the ego channel, effectively
+behaving like an MLP.
+(These are averaged statistics, not per-node facts; individual nodes
+may deviate from the average.)
 \end{example}
 
 
-\subsection{The Extended Variant: $f = g + h$ (Equation 8)}
+\subsection{The Extended Variant: $f = g + h$ (Equation 7)}
 \label{sec:extended}
 
 \begin{equation}
   f_{ij}^{(\ell)} = g_{ij}^{(\ell)} + h_{ij}^{(\ell)}, \quad\text{where}\quad
   h_{ij}^{(\ell)} = \mathrm{softplus}\bigl(\mathbf{a}^\top [\bW_g \bh_i^{(\ell)} \| \bW_g \bh_j^{(\ell)}]\bigr)
-  \tag{Eq.~8}
+  \tag{Eq.~7}
 \end{equation}
 
 \textbf{What it computes:}
@@ -672,11 +686,11 @@ An enriched edge cost that adds a \emph{learned asymmetric} component $h_{ij}$
 on top of the observed divergence $g_{ij}$.
 In the default ``lite'' variant, $f_{ij} = g_{ij}$ (no $h$ component).
 In the ``extended'' variant, $f_{ij} = g_{ij} + h_{ij}$ replaces $g_{ij}$ in the
-concordance formula (Eq.~4).
+concordance formula (Eq.~3).
 
 \textbf{Symbol breakdown:}
 \begin{itemize}
-  \item $g_{ij}$: the observed divergence from Eq.~3 (L2 distance in projection space).
+  \item $g_{ij}$: the observed divergence from Eq.~2 (L2 distance in projection space).
   \item $[\bW_g \bh_i \| \bW_g \bh_j] \in \R^{2d'}$: the \textbf{concatenation}
     of $i$'s and $j$'s projected representations.
     If each projected representation is 64-dimensional, this is a 128-dimensional
@@ -712,14 +726,14 @@ The lite version (just $g_{ij}$) is the default because the added parameters
 of $h_{ij}$ risk overfitting on the small datasets in the benchmark suite.
 
 
-\subsection{Calibration Loss (Equation 9)}
+\subsection{Calibration Loss (Equation 8)}
 \label{sec:calibration}
 
 \begin{equation}
   \mathcal{L}_{\text{cal}} = \frac{1}{|E_{\text{train}}|}
   \sum_{(i,j) \in E_{\text{train}}}
   \bigl[\mathrm{ReLU}(g_{ij} - \mathbb{1}[y_i \neq y_j])\bigr]^2
-  \tag{Eq.~9}
+  \tag{Eq.~8}
 \end{equation}
 
 \textbf{What it computes:}
@@ -832,6 +846,47 @@ does not need to ``unlearn'' reliance on bad graph information---it was never
 relying on it in the first place.
 
 
+\subsection{Algorithm 1: The Full CSNA Layer}
+\label{sec:algorithm}
+
+The paper consolidates all five steps described above into a single algorithm.
+We reproduce it here for reference.
+This is the \emph{lite} version (using only the observed divergence $g_{ij}$;
+for the extended variant, replace $g_{ij}$ with $f_{ij} = g_{ij} + h_{ij}$).
+
+\begin{algorithm}[h]
+\caption{CSNA Layer (Lite Version)}
+\begin{algorithmic}[1]
+\REQUIRE Node features $\mathbf{H}^{(\ell)} \in \R^{n \times d}$, edge index $E$, temperature $\tau$
+\ENSURE Updated features $\mathbf{H}^{(\ell+1)} \in \R^{n \times d'}$
+\FOR{each edge $(i,j) \in E$}
+  \STATE $g_{ij} \leftarrow \|\bW_g \bh_i - \bW_g \bh_j\|_2$ \hfill \{Pairwise distance in learned projection\}
+  \STATE $s_{ij} \leftarrow \sigma(-g_{ij}/\tau)$ \hfill \{Concordance score\}
+\ENDFOR
+\FOR{each node $i \in V$}
+  \STATE $\bh_i^{\text{con}} \leftarrow \sum_{j \in \N(i)} \tilde{s}_{ij}\, \bW_{\text{con}}\, \bh_j$ \hfill \{Concordant channel\}
+  \STATE $\bh_i^{\text{dis}} \leftarrow \sum_{j \in \N(i)} \tilde{d}_{ij}\, \bW_{\text{dis}}\, \bh_j$ \hfill \{Discordant channel\}
+  \STATE $\bh_i^{\text{self}} \leftarrow \bW_{\text{self}}\, \bh_i$ \hfill \{Ego transform\}
+  \STATE $\bh_i^{(\ell+1)} \leftarrow \sum_k \gamma_k(\bh_i) \cdot \bh_i^k$ \hfill \{Gated combination\}
+\ENDFOR
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Reading the algorithm:}
+\begin{itemize}
+  \item \textbf{Lines 1--4} (edge loop): For every edge in the graph, compute the
+    observed divergence $g_{ij}$ (Eq.~2) and convert it to a concordance score
+    $s_{ij}$ (Eq.~3). Self-loops are included; since $g_{ii} = 0$, self-loops
+    receive $s_{ii} = 0.5$ (the maximum concordance).
+  \item \textbf{Lines 5--10} (node loop): For each node, compute the three channel
+    representations using softmax-normalized weights
+    ($\tilde{s}_{ij}$ and $\tilde{d}_{ij}$, from Section~\ref{sec:softmax}),
+    then combine them via the learned per-node gate $\gamma$ (Eq.~6).
+  \item The algorithm is applied $L$ times (the paper uses $L=2$), with residual
+    connections between layers.
+\end{itemize}
+
+
 %% ================================================================
 \section{Theoretical Analysis: When Does Cost-Sensitive Aggregation Help?}
 \label{sec:theory}
@@ -909,7 +964,7 @@ After one round of symmetrically normalized aggregation with self-loops, the exp
 \begin{equation}
   \E[\bar{\bh}_+^{(1)} - \bar{\bh}_-^{(1)}]
   = \frac{p - q}{p + q}(\boldsymbol{\mu}_+ - \boldsymbol{\mu}_-) + O(1/n)
-  \tag{Thm.~1}
+  \tag{Eq.~9, Thm.~1}
 \end{equation}
 \end{theorem}
 
@@ -1004,7 +1059,7 @@ Then:
 \begin{equation}
   \E[\bar{\bh}_+^{(1)} - \bar{\bh}_-^{(1)}]
   = \frac{p\, w_+ - q\, w_-}{p\, w_+ + q\, w_-}(\boldsymbol{\mu}_+ - \boldsymbol{\mu}_-) + O(1/n)
-  \tag{Thm.~2}
+  \tag{Eq.~11, Thm.~2}
 \end{equation}
 
 The scaling factor is positive---preserving the original class direction---if and only if $w_+/w_- > q/p$.
@@ -1118,7 +1173,7 @@ Theorem~2 applies to CSNA's concordant channel with:
 
 For the theorem's sign-preservation condition to hold, CSNA's learned cost function
 must assign concordance scores such that $w_+/w_- > q/p$.
-The \textbf{calibration regularizer} (Eq.~9) encourages this by penalizing high costs
+The \textbf{calibration regularizer} (Eq.~8) encourages this by penalizing high costs
 on same-class edges, which pushes $s_{ij}$ higher for same-class pairs and thus
 increases $w_+/w_-$.
 
@@ -1133,6 +1188,202 @@ Whether CSNA can actually learn a good cost function depends on the data: on
 adversarial-heterophily datasets (Texas, Wisconsin, Cornell), the paper shows
 that CSNA does learn good separation (high AUC for edge-type classification);
 on informative-heterophily datasets (Chameleon, Squirrel), it does not.
+
+
+\subsection{Proof Details: Equations from the Appendix}
+\label{sec:proof_details}
+
+The paper's appendix provides detailed proofs of Theorems~1 and~2.
+We walk through the key intermediate equations here.
+
+\subsubsection{Proof of Theorem 1 (Appendix E.1)}
+
+Consider the binary CSBM with $n$ nodes, two equal classes $V_+$ and $V_-$,
+intra-class edge probability $p$, and inter-class edge probability $q > p$.
+For a node $i \in V_+$, the number of same-class neighbors is
+$n_s(i) \sim \mathrm{Bin}(n/2 - 1, p)$ and different-class neighbors
+$n_d(i) \sim \mathrm{Bin}(n/2, q)$.
+Under the dense CSBM (degrees are $\Theta(n)$), the self-loop in
+$\mathbf{A} + \mathbf{I}$ contributes $O(1/n)$ per node and does not affect
+the leading coefficient.
+
+The expected post-aggregation representation for a class $+1$ node is
+(paper Equation~10, also labeled~13 in the appendix proof):
+\begin{equation}
+  \E[\bh_i^{(1)} | y_i = +1]
+  = \frac{p}{p+q}\,\boldsymbol{\mu}_+
+  + \frac{q}{p+q}\,\boldsymbol{\mu}_-
+  + O(1/n)
+  = \frac{p - q}{p + q} \cdot \frac{\mu}{2}\,\mathbf{e}_1 + O(1/n).
+  \tag{Eq.~10}
+\end{equation}
+
+\textbf{What it says:}
+Each class $+1$ node's expected representation after one round of mean aggregation
+is a weighted average of the two class means, where the weights are the
+relative edge probabilities.
+The fraction $p/(p+q)$ of its neighbors are same-class (contributing
+$\boldsymbol{\mu}_+$) and $q/(p+q)$ are different-class (contributing
+$\boldsymbol{\mu}_-$).
+Since $\boldsymbol{\mu}_+ = +\frac{\mu}{2}\mathbf{e}_1$ and
+$\boldsymbol{\mu}_- = -\frac{\mu}{2}\mathbf{e}_1$, the combination
+simplifies to $(p-q)/(p+q) \cdot \frac{\mu}{2}\,\mathbf{e}_1$.
+The $O(1/n)$ term absorbs the self-loop contribution and the concentration
+error (by Hoeffding's inequality, $n_s(i)/d_i$ concentrates around $p/(p+q)$
+at rate $O(1/\sqrt{n})$, giving $O(1/n)$ after averaging over $n/2$ nodes per class).
+
+By symmetry, $\E[\bh_i^{(1)} | y_i = -1] = \frac{p-q}{p+q} \cdot (-\frac{\mu}{2})\,\mathbf{e}_1 + O(1/n)$.
+Averaging over classes yields the class-mean separation (Equation~14 in the appendix):
+\begin{equation}
+  \E[\bar{\bh}_+^{(1)} - \bar{\bh}_-^{(1)}]
+  = \frac{p - q}{p + q}(\boldsymbol{\mu}_+ - \boldsymbol{\mu}_-) + O(1/n).\;\square
+  \tag{Eq.~14}
+\end{equation}
+
+This completes the proof of Theorem~1: the scaling factor $\lambda = (p-q)/(p+q)$
+is negative when $q > p$, confirming that mean aggregation reverses the
+label-aligned signal direction under heterophily.
+
+
+\subsubsection{Proof of Theorem 2 (Appendix E.2)}
+
+Now suppose the aggregation assigns expected weight $w_+$ to same-class edges
+and $w_-$ to different-class edges.
+The self-loop still contributes $O(1/n)$ as in Theorem~1.
+At leading order, the expected representation of a class $+1$ node becomes
+(paper Equation~12, also labeled~15 in the appendix):
+\begin{equation}
+  \E[\bh_i^{(1)} | y_i = +1]
+  = \frac{p\, w_+}{p\, w_+ + q\, w_-}\,\boldsymbol{\mu}_+
+  + \frac{q\, w_-}{p\, w_+ + q\, w_-}\,\boldsymbol{\mu}_-
+  + O(1/n).
+  \tag{Eq.~12}
+\end{equation}
+
+\textbf{What changed from Theorem~1:}
+Compared with Eq.~10, the edge probabilities $p$ and $q$ are now replaced by
+\emph{effective} contributions $p\,w_+$ and $q\,w_-$.
+If the weighting scheme assigns high weight to same-class edges ($w_+ \gg w_-$),
+the effective contribution of same-class neighbors is amplified, counteracting
+the numerical dominance of cross-class edges.
+
+Setting $w_+ = w_- = 1$ recovers Eq.~10 (Theorem~1).
+
+Averaging over classes (paper Equation~16 in the appendix):
+\begin{equation}
+  \E[\bar{\bh}_+^{(1)} - \bar{\bh}_-^{(1)}]
+  = \frac{p\, w_+ - q\, w_-}{p\, w_+ + q\, w_-}
+  (\boldsymbol{\mu}_+ - \boldsymbol{\mu}_-) + O(1/n).
+  \tag{Eq.~16}
+\end{equation}
+
+The numerator $p\, w_+ - q\, w_-$ is positive if and only if
+$w_+/w_- > q/p$. This completes the proof. $\square$
+
+\begin{example}
+Why does the condition $w_+/w_- > q/p$ arise?
+
+The number of same-class edges scales with $p$, and the number of cross-class
+edges scales with $q$.
+In the aggregated sum, same-class edges contribute a total ``mass'' proportional
+to $p \cdot w_+$ pulling toward $\boldsymbol{\mu}_+$, while cross-class edges
+contribute mass proportional to $q \cdot w_-$ pulling toward
+$\boldsymbol{\mu}_-$.
+For the positive class direction to win, we need
+$p \cdot w_+ > q \cdot w_-$, i.e., $w_+/w_- > q/p$.
+
+With $p = 0.1$ and $q = 0.4$: the condition requires $w_+/w_- > 4$.
+If CSNA learns $w_+ = 0.45$ and $w_- = 0.10$ (concordance scores for
+same-class and different-class edges), then $w_+/w_- = 4.5 > 4$---the
+condition is satisfied and the signal direction is preserved.
+\end{example}
+
+
+\subsubsection{Appendix Equations 13, 15, and 17}
+
+For completeness, we list the appendix-specific equation labels that
+correspond to the derivations above.
+The appendix uses its own numbering for detailed proof steps:
+
+\textbf{Equation 13} (Appendix E.1) gives the per-node expected representation
+under mean aggregation, identical in content to Eq.~10 above:
+\begin{equation}
+  \E[\bh_i^{(1)} | y_i = +1]
+  = \frac{p}{p+q}\,\boldsymbol{\mu}_+
+  + \frac{q}{p+q}\,\boldsymbol{\mu}_-
+  + O(1/n)
+  = \frac{p - q}{p + q} \cdot \frac{\mu}{2}\,\mathbf{e}_1 + O(1/n).
+  \tag{Eq.~13}
+\end{equation}
+
+\textbf{Equation 15} (Appendix E.2) gives the per-node expected representation
+under cost-sensitive aggregation, identical in content to Eq.~12 above:
+\begin{equation}
+  \E[\bh_i^{(1)} | y_i = +1]
+  = \frac{p\, w_+}{p\, w_+ + q\, w_-}\,\boldsymbol{\mu}_+
+  + \frac{q\, w_-}{p\, w_+ + q\, w_-}\,\boldsymbol{\mu}_-
+  + O(1/n).
+  \tag{Eq.~15}
+\end{equation}
+
+\textbf{Equation 17} (Appendix G) decomposes the individual node's deviation
+from the class mean into feature noise and edge-composition terms, and is
+discussed in Section~\ref{sec:within_class_scatter} below.
+
+
+\subsection{Within-Class Scatter (Appendix G)}
+\label{sec:within_class_scatter}
+
+Theorem~2 bounds the \emph{between-class} separation
+$\E[\bar{\bh}_+^{(1)} - \bar{\bh}_-^{(1)}]$, but classification quality also
+depends on how tightly clustered nodes are \emph{within} each class.
+Appendix~G of the paper addresses this by analyzing the within-class scatter
+matrix $\mathbf{S}_W$.
+
+\textbf{The decomposition.}
+For a node $i \in V_+$, the deviation from the class mean can be written as
+(paper Equation~17):
+\begin{equation}
+  \bh_i^{(1)} - \bar{\bh}_+^{(1)}
+  = \sum_{j \in \N(i)} w_{ij}\bigl(\bx_j - \E[\bx_j | y_j]\bigr)
+  + \text{(edge-composition terms)}.
+  \tag{Eq.~17}
+\end{equation}
+
+The first term captures \textbf{feature noise}: each neighbor $j$'s feature
+vector deviates from the class-conditional mean $\E[\bx_j | y_j]$ due to the
+random draw $\bx_j \sim \mathcal{N}(\boldsymbol{\mu}_{y_j}, \mathbf{I}_d)$.
+This noise is averaged over $d_i = \Theta(n)$ neighbors, giving variance
+$O(d/n)$.
+
+The edge-composition terms capture the fact that different nodes have
+different numbers of same-class and different-class neighbors
+(random variation around the expected fractions $p/(p+q)$ and $q/(p+q)$).
+
+\textbf{Effect of cost-sensitive weighting.}
+Under cost-sensitive weighting, same-class neighbors receive higher weight,
+so the aggregated representation is dominated by same-class features.
+The within-class scatter is bounded by:
+\[
+  \E[\mathrm{tr}(\mathbf{S}_W)] \leq n\,d\,/\,d_{\mathrm{eff}},
+\]
+where $d_{\mathrm{eff}} = \E[\sum_j w_{ij}^2]^{-1}$ is an effective degree
+that depends on the weight distribution.
+Intuitively, concentrating weight on fewer (same-class) neighbors reduces
+$d_{\mathrm{eff}}$, which could increase scatter; but this is offset by the
+benefit of reducing cross-class contamination in the between-class separation.
+
+\textbf{Why a tight bound is hard.}
+The paper notes that a complete formal bound on $\mathrm{tr}(\mathbf{S}_W)$
+requires tracking the correlation between the random graph structure and the
+cost function (which itself depends on the features).
+Since the cost function is learned and feature-dependent, the weights $w_{ij}$
+are not independent of the feature noise, making a tight bound technically
+challenging.
+The key qualitative conclusion is that cost-sensitive weighting improves the
+between-class separation (Theorem~2) without catastrophically increasing
+within-class scatter, because the noise-averaging effect over $\Theta(n)$
+neighbors still applies.
 
 
 %% ================================================================
@@ -1166,7 +1417,7 @@ $\sigma(\cdot)$ & Function & Nonlinear activation (ReLU or sigmoid) \\
 $\bW_g \in \R^{d' \times d}$ & Matrix & Learned projection for cost computation \\
 $g_{ij}$ & Scalar $\geq 0$ & Observed divergence (L2 distance in projection) \\
 $\tau$ & Scalar $> 0$ & Temperature for sigmoid concordance \\
-$s_{ij}$ & Scalar $\in (0,1)$ & Concordance score \\
+$s_{ij}$ & Scalar $\in (0,0.5]$ & Concordance score \\
 $\tilde{s}_{ij}$ & Scalar $\in (0,1)$ & Softmax-normalized concordance weight \\
 $\tilde{d}_{ij}$ & Scalar $\in (0,1)$ & Softmax-normalized discordance weight \\
 $\bW_{\text{con}}, \bW_{\text{dis}} \in \R^{d' \times d}$ & Matrices & Channel-specific weight matrices \\
