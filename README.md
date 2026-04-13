@@ -121,7 +121,7 @@ model = CSNA(
 @article{weiss2026csna,
   title={Cost-Sensitive Neighborhood Aggregation for Heterophilous Graphs: When Does Per-Edge Routing Help?},
   author={Weiss, Eyal},
-  journal={arXiv preprint},
+  journal={arXiv preprint arXiv:2603.24291},
   year={2026}
 }
 ```
