@@ -142,8 +142,8 @@ Standard baselines (GCN, GAT, GraphSAGE, MLP) use PyTorch Geometric layers. All 
 ## Author
 
 **Eyal Weiss**
-Computer Science Faculty, Technion -- Israel Institute of Technology
-[eweiss@campus.technion.ac.il](mailto:eweiss@campus.technion.ac.il)
+Robotics Institute, Carnegie Mellon University (work done at the Computer Science Faculty, Technion)
+[eyalw@andrew.cmu.edu](mailto:eyalw@andrew.cmu.edu)
 
 ## License
 
