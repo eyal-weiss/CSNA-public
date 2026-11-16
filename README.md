@@ -4,7 +4,7 @@ This repository contains the official implementation of the paper:
 
 > **Cost-Sensitive Neighborhood Aggregation for Heterophilous Graphs: When Does Per-Edge Routing Help?**
 > Eyal Weiss, Technion -- Israel Institute of Technology
-> arXiv preprint, 2026
+> arXiv preprint [arXiv:2603.24291](https://arxiv.org/abs/2603.24291), 2026
 
 Graph Neural Networks (GNNs) learn from data organized as networks — social graphs, molecules, citation networks. They work by aggregating information from neighboring nodes, but this fails when connected nodes tend to belong to *different* classes (a property called *heterophily*). CSNA addresses this by measuring how different each pair of connected nodes is and routing their messages through separate processing channels depending on whether they appear similar or dissimilar.
 
